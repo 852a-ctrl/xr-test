@@ -128,17 +128,35 @@ button:focus-visible{outline:3px solid var(--muted);outline-offset:2px}
 #manual{position:fixed;inset:0;background:rgba(0,0,0,.78);color:var(--paper)}
 #manual svg{position:absolute;inset:0;width:100%;height:100%}
 #manual .lab{position:absolute;font-size:15px;line-height:1.5;background:var(--ink);border:2px solid var(--paper);padding:4px 10px;white-space:pre}
-#manual .close{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));
+#manual .close{position:absolute;left:50%;transform:translateX(-50%);top:calc(14px + env(safe-area-inset-top,0px));
   font-family:var(--font);font-size:16px;background:var(--ink);color:var(--paper);border:2px solid var(--paper);padding:8px 22px;cursor:pointer}
 body.manual .corner,body.manual .pad{z-index:20;pointer-events:none}
 body.manual #manual{z-index:15}
 #toast{position:fixed;left:50%;top:22%;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:6px 14px;font-size:15px;
   opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
 #toast.show{opacity:1}
+#edWord button.blankSeen{border:2px dashed var(--green);min-width:44px;color:transparent}
+#edWord button.blankReal{border-bottom:2px solid var(--paper)}
+#editor.white #edWord button{color:var(--paper)}
+#editor.greenLit .panel{box-shadow:0 0 0 6px rgba(31,168,69,.6)}
+#edTools .edGreen{color:var(--green);border-color:var(--green);min-width:90px}
+#cam{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:-1}
+#eraTint{position:fixed;inset:0;pointer-events:none}
+#night{position:fixed;inset:0;pointer-events:none;background:rgba(10,20,70,.22);opacity:0;transition:opacity 1.2s}
+#light.white{background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.55) 0,rgba(255,255,240,.3) calc(var(--lr,140px)*.8),rgba(255,255,255,0) calc(var(--lr,140px)*1.2));mix-blend-mode:normal}
+#reticle.lit.white{border-color:rgba(160,160,160,.9);box-shadow:0 0 18px rgba(255,255,255,.9) inset}
+#circle{position:fixed;inset:0;width:100%;height:100%;background:var(--paper);cursor:pointer}
+#manual .whiteBtn{position:absolute;width:82px;height:72px;border:3px solid #fff;background:#fff;box-shadow:0 0 30px 10px rgba(255,255,255,.9);opacity:0;transition:opacity 2.4s}
+#manual .whiteBtn.show{opacity:1}
+#btext .title{font-size:64px;letter-spacing:.06em}
+#btext .title .s{transition:opacity 3s}
 @media (prefers-reduced-motion:reduce){#arrow,.blink3,.btn.appear{animation:none}#black,#light{transition:none}}
 </style>
 
+<video id="cam" playsinline muted hidden></video>
 <canvas id="gl"></canvas>
+<div id="eraTint"></div>
+<div id="night"></div>
 <div id="light"></div>
 <div id="reticle"></div>
 <div id="flash"></div>
@@ -174,6 +192,7 @@ body.manual #manual{z-index:15}
   <div id="edWord"></div>
   <div id="edTabs"></div>
   <div id="edGrid"></div>
+  <div class="row" id="edTools" hidden></div>
   <div class="row"><button id="edOk">決定</button><button id="edCancel">やめる</button></div>
 </div></div>
 
@@ -184,6 +203,7 @@ body.manual #manual{z-index:15}
 
 <div id="manual" hidden><svg id="mSvg"></svg><div id="mLabels"></div><button class="close" id="manClose">閉じる</button></div>
 
+<canvas id="circle" hidden></canvas>
 <div id="black" class="clear"><canvas id="noise" hidden></canvas><p id="btext"></p></div>
 
 <div id="title">
@@ -211,7 +231,7 @@ const AIM = 0.24, LIGHT = 0.3;                       // 調べられる角度、
 const COLORS = ['red', 'green', 'blue'];
 
 /* ================= 3D の土台 ================= */
-const renderer = new THREE.WebGLRenderer({ canvas: $('gl'), antialias: true });
+const renderer = new THREE.WebGLRenderer({ canvas: $('gl'), antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
 renderer.setClearColor(0xffffff, 1);
 const scene = new THREE.Scene();
@@ -317,16 +337,18 @@ function textPlane(text, color, wid, opt) {
   const cv = document.createElement('canvas'); cv.width = 512; cv.height = 192;
   const g = cv.getContext('2d');
   g.font = `110px DotGothic16, 'Hiragino Kaku Gothic ProN', sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
-  let fs = 110; while (g.measureText(text).width > 470 && fs > 40) { fs -= 6; g.font = `${fs}px DotGothic16, sans-serif`; }
+  let fs = opt.big ? 200 : 110; if (opt.big) g.font = `${fs}px DotGothic16, sans-serif`;
+  while (g.measureText(text).width > 470 && fs > 40) { fs -= 6; g.font = `${fs}px DotGothic16, sans-serif`; }
   if (opt.outline !== false) { g.lineJoin = 'round'; g.strokeStyle = '#ffffff'; g.lineWidth = 16; g.strokeText(text, 256, 100); }
   g.fillStyle = color; g.fillText(text, 256, 100);
+  if (opt.big) { g.strokeStyle = color; g.lineWidth = 7; g.strokeText(text, 256, 100); }   // 細い字を太く
   const t = new THREE.CanvasTexture(cv);
   const m = new THREE.Mesh(new THREE.PlaneGeometry(wid, wid * 192 / 512), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, depthTest: !!opt.depth, side: THREE.DoubleSide }));
   m.renderOrder = opt.depth ? 1 : 10; return m;
 }
 // 赤い光で見える印：短い文字（「」を除いて4文字まで）はそのまま、長い文は「～」だけ。長い文は調べると読む
 const isShort = t => [...t.replace(/[「」]/g, '')].length <= 4;
-function redMark(text, wid) { return isShort(text) ? textPlane(text, '#e01818', wid) : textPlane('～', '#e01818', wid * 0.7); }
+function redMark(text, wid) { return isShort(text) ? textPlane(text, '#e01818', wid) : textPlane('～', '#e01818', wid * 1.6, { big: true }); }
 
 // 扉（線画）。開くと奥が黒くなる
 function makeDoor(color, fill) {
@@ -404,10 +426,10 @@ function makeRoute(pts, stops, pause, endPause, speed) {
 /* ================= 状態 ================= */
 let room = null;     // いまの部屋 { id, grp, targets, tick }
 const G = { flags: newFlags(), log: [] };
-function newFlags() { return { red: false, green: false, blue: false, redPaint: false, seen: {}, ev: {} }; }
+function newFlags() { return { red: false, green: false, blue: false, redPaint: false, paintGB: false, white: false, seen: {}, ev: {} }; }
 
 /* ================= 通路の共通の作り（グレー、正面に端末とその左に隙間、左に入口、右に出口） ================= */
-function corridor(color) {
+function corridor(color, opt) {
   const W = 3.0, D = 1.5, F = G.flags;
   const sh = roomShell(W, D, { wall: 0xc4c4c4, floor: 0xb0b0b0, edge: 0x3a3a3a, gridColor: 0x9a9a9a, grid: 1.0 });
   const crack = { x: -1.3, y: 1.55, w: 0.09, h: 1.3 };
@@ -431,7 +453,7 @@ function corridor(color) {
   const keys = segs([...loop([[-0.18, -0.06, 0.072], [0.18, -0.06, 0.072], [0.18, -0.3, 0.072], [-0.18, -0.3, 0.072]]),
     [-0.06, -0.06, 0.072], [-0.06, -0.3, 0.072], [0.06, -0.06, 0.072], [0.06, -0.3, 0.072], [-0.18, -0.18, 0.072], [0.18, -0.18, 0.072]], new THREE.LineBasicMaterial({ color: 0x000000, transparent: true }));
   term.add(keys);
-  term.position.set(0, -0.25, -D + 0.07); sh.grp.add(term);
+  term.position.set(0, -0.25, -D + 0.07); if (!(opt && opt.noTerm)) sh.grp.add(term);
   // 入口（左の壁）
   const ent = makeDoor(0x3a3a3a, 0xb8b8b8); placeOn(ent.g, 'left', W, D, 0, 0, 0.004); sh.grp.add(ent.g);
   const targets = {
@@ -581,7 +603,7 @@ const ROOMS = {
       box: { pos: boxHome.clone(), act: () => true, hidden: 's2_box', label: lb('「2」', V(1.75, FLOOR + 0.9, 1.75)),
         examine() { say(F.seen.s2_box ? '「2」' : '箱だ。'); } },
       box2: { pos: box2Home.clone(), act: () => true, examine() { say('空の箱だ。'); } },
-      door: { pos: V(W, FLOOR + 1.0, 0), act: () => true, hidden: 's2_door', label: lb('「３つのかけあわせ」', V(W - 0.12, FLOOR + 1.55, 0)),
+      door: { pos: V(W, FLOOR + 1.0, 0), act: () => true, hidden: 's2_door', label: lb('「３つのかけあわせ」', V(W - 0.12, FLOOR + 1.55, 0)), canSee: () => !F.ev.s2_door_open,
         examine() {
           if (F.ev.s2_door_open) { goRoom('c2'); return; }
           const ask = () => openCode('00', v => {
@@ -747,7 +769,7 @@ const ROOMS = {
     const lab = redMark('「開く」', 0.55); lab.position.set(W - 0.12, FLOOR + 1.55, 0); sh.grp.add(lab);
     const targets = {
       shutter: { pos: V(-W, FLOOR + 1.0, 0), act: () => true, examine() { say('シャッターが下りている。'); } },
-      door: { pos: V(W, FLOOR + 1.0, 0), act: () => true, hidden: 'c3_door', label: lab,
+      door: { pos: V(W, FLOOR + 1.0, 0), act: () => true, hidden: 'c3_door', label: lab, canSee: () => !F.ev.c3_door_open,
         examine() {
           if (F.ev.c3_door_open) { goRoom('s4'); return; }
           if (!F.seen.c3_door) { say('扉は閉まっている。'); return; }
@@ -814,7 +836,7 @@ const ROOMS = {
         } },
       key: { pos: keyPos.clone().add(V(0, 0.05, 0)), act: () => !!F.ev.s4_key && !F.ev.hasKey,
         examine() { F.ev.hasKey = true; key.visible = false; say('鍵を拾った'); } },
-      door: { pos: doorPos, act: () => true, hidden: 's4_door', label: doorLab, noLight: true,
+      door: { pos: doorPos, act: () => true, hidden: 's4_door', label: doorLab, noLight: true, canSee: () => !F.ev.s4_door_open,
         examine() {
           if (F.ev.s4_door_open) { goRoom('c4'); return; }
           if (!F.seen.s4_door) { say('扉は閉まっている。'); return; }
@@ -932,8 +954,426 @@ const ROOMS = {
     return { grp: sh.grp, targets, tick };
   },
 
-  // ---- ステージ2-1：まだ作っていない ----
-  s5: null
+  // ---- ステージ2-1：時代で変わる部屋。仕切りの壁（過去はアーチ、未来は崩れた穴）、植物（芽・若木・大木）、鍵穴は過去だけ ----
+  s5: () => {
+    const W = 2.5, D = 2.5, F = G.flags, PX = 1.0;
+    const sh = roomShell(W, D, { wall: 0xffffff, floor: 0xffffff, edge: 0x000000, gridColor: 0xd4d4d4 });
+    sh.place('front'); sh.place('back'); sh.place('left'); sh.place('right');
+    // 仕切りの壁：時代ごとに3枚作り、切り替える（ローカル x ＝ 奥行き z）
+    const part = {};
+    const mkPart = (holes) => { const g = wall(D * 2, holes, faceMat(0xffffff), INK); g.position.set(PX, FLOOR, 0); g.rotation.y = -Math.PI / 2; sh.grp.add(g); return g; };
+    part.present = mkPart([]);
+    part.past = mkPart([{ x: -1.2, y: 0.95, w: 0.9, h: 1.9, noEdge: true }]);
+    part.future = mkPart([{ x: 0.5, y: 0.9, w: 1.0, h: 1.0, noEdge: true }]);
+    // 仕切りの上下の線
+    sh.grp.add(segs([[PX, FLOOR, -D], [PX, FLOOR, D], [PX, CEIL, -D], [PX, CEIL, D]]));
+    // 過去：アーチの縁
+    const arch = []; for (let i = 0; i <= 16; i++) { const a = Math.PI * i / 16; arch.push([PX - 0.003, FLOOR + 1.45 + Math.sin(a) * 0.45, -1.2 + Math.cos(a) * 0.45]); }
+    const archL = []; for (let i = 0; i < 16; i++) archL.push(arch[i], arch[i + 1]);
+    archL.push([PX - 0.003, FLOOR, -1.65], [PX - 0.003, FLOOR + 1.45, -1.65], [PX - 0.003, FLOOR, -0.75], [PX - 0.003, FLOOR + 1.45, -0.75]);
+    part.past.userData.edge = segs(archL); sh.grp.add(part.past.userData.edge);
+    // 未来：崩れた穴のぎざぎざの縁と、床のがれき
+    const jag = [[0.0, 0.4], [0.15, 0.55], [0.1, 0.8], [0.25, 1.1], [0.2, 1.4], [0.5, 1.33], [0.75, 1.42], [1.0, 1.25], [0.9, 1.0], [1.0, 0.7], [0.85, 0.5], [1.0, 0.4]];
+    const jl = []; for (let i = 0; i < jag.length - 1; i++) jl.push([PX - 0.003, FLOOR + jag[i][1], jag[i][0]], [PX - 0.003, FLOOR + jag[i + 1][1], jag[i + 1][0]]);
+    jl.push([PX - 0.003, FLOOR + 0.4, 0.0], [PX - 0.003, FLOOR + 0.4, 1.0]);
+    for (const [x, z, s] of [[0.75, 0.3, 0.12], [0.6, 0.75, 0.09], [0.85, 0.95, 0.1]]) jl.push(...loop([[x - s, FLOOR + 0.004, z - s], [x + s, FLOOR + 0.004, z - s * 0.6], [x + s * 0.7, FLOOR + 0.004, z + s], [x - s * 0.8, FLOOR + 0.004, z + s * 0.7]]));
+    part.future.userData.edge = segs(jl); sh.grp.add(part.future.userData.edge);
+    // 鍵穴（過去だけ、仕切りの壁）
+    const kh = new THREE.Group(); kh.add(segs([...rect2(-0.1, -0.14, 0.1, 0.14, 0.004)]));
+    const khr = []; for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2, b = (i + 1) / 12 * Math.PI * 2; khr.push([Math.cos(a) * 0.03, 0.03 + Math.sin(a) * 0.03, 0.006], [Math.cos(b) * 0.03, 0.03 + Math.sin(b) * 0.03, 0.006]); }
+    kh.add(segs([...khr, [-0.015, 0.01, 0.006], [-0.03, -0.07, 0.006], [0.015, 0.01, 0.006], [0.03, -0.07, 0.006], [-0.03, -0.07, 0.006], [0.03, -0.07, 0.006]]));
+    kh.position.set(PX - 0.004, FLOOR + 1.3, -0.1); kh.rotation.y = -Math.PI / 2; sh.grp.add(kh);
+    const khPos = V(PX, FLOOR + 1.3, -0.1);
+    // 植物：過去は芽、現在は若木、未来は大木。若木と大木は透明な箱の場所をおおう
+    const PP = V(-0.3, FLOOR, -1.6);
+    const plant = {};
+    const tree = (trunkH, trunkR, canopyR, canopyY) => {
+      const g = new THREE.Group();
+      g.add(segs([[-trunkR, 0, 0], [-trunkR * 0.7, trunkH, 0], [trunkR, 0, 0], [trunkR * 0.7, trunkH, 0], [0, 0, -trunkR], [0, trunkH, -trunkR * 0.7], [0, 0, trunkR], [0, trunkH, trunkR * 0.7]]));
+      const sp = new THREE.Mesh(new THREE.IcosahedronGeometry(canopyR, 1), faceMat(0xffffff)); sp.position.y = canopyY; g.add(sp);
+      const se = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(canopyR, 1)), INK); se.position.y = canopyY; g.add(se);
+      g.position.copy(PP); sh.grp.add(g); return g;
+    };
+    plant.past = new THREE.Group(); plant.past.add(segs([[0, 0, 0], [0, 0.12, 0], [0, 0.1, 0], [0.06, 0.15, 0], [0, 0.1, 0], [-0.06, 0.15, 0]]));
+    plant.past.position.set(-0.3, FLOOR, -2.2); sh.grp.add(plant.past);
+    plant.present = tree(1.3, 0.08, 0.55, 1.6);
+    plant.future = tree(1.9, 0.22, 1.25, 2.0);
+    // 鉢（どの時代も同じ場所の床に、土の丸）
+    const pot = []; for (let i = 0; i < 20; i++) { const a = i / 20 * Math.PI * 2, b = (i + 1) / 20 * Math.PI * 2; pot.push([PP.x + Math.cos(a) * 0.35, FLOOR + 0.004, PP.z + Math.sin(a) * 0.35], [PP.x + Math.cos(b) * 0.35, FLOOR + 0.004, PP.z + Math.sin(b) * 0.35]); }
+    sh.grp.add(segs(pot, lineMat(0x9a9a9a)));
+    // 透明な箱（過去だけ。緑の光で見つけ、緑の色で実体に）。赤で「はこがある」→「はこがあく」で開き、鍵
+    const TB = V(-0.3, FLOOR + 0.21, -1.6);
+    const tbLines = boxLines(0.42, 0.42, 0.42, new THREE.LineDashedMaterial({ color: 0x0f8a3a, dashSize: 0.04, gapSize: 0.03, transparent: true, opacity: 0 }));
+    tbLines.computeLineDistances(); tbLines.position.copy(TB); sh.grp.add(tbLines);
+    const crate = makeCrate(0.42); crate.g.position.copy(TB); crate.g.lookAt(0, TB.y, 0); sh.grp.add(crate.g);
+    if (F.ev.tbox_open) crate.lid.rotation.x = -1.9;
+    const tbLab = redMark('「はこがある」', 0.55); tbLab.position.copy(TB).add(V(0, 0.45, 0)); sh.grp.add(tbLab);
+    const key = new THREE.Group(); const ring = []; for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2, b = (i + 1) / 16 * Math.PI * 2; ring.push([Math.cos(a) * 0.05 - 0.1, 0, Math.sin(a) * 0.05], [Math.cos(b) * 0.05 - 0.1, 0, Math.sin(b) * 0.05]); }
+    key.add(segs([...ring, [-0.05, 0, 0], [0.12, 0, 0], [0.08, 0, 0], [0.08, 0, 0.04], [0.12, 0, 0], [0.12, 0, 0.05]]));
+    const KP = V(-0.1, FLOOR + 0.01, -1.15); key.position.copy(KP); key.scale.setScalar(1.6); sh.grp.add(key);
+    // 仕切りの向こう：右の壁に扉（鍵を使うとできる）。未来の崩れた穴からだけ見える
+    const door = makeDoor(0x000000, 0xffffff); placeOn(door.g, 'right', W, D, 1.25, 0, 0.004); sh.grp.add(door.g);
+    const DP = V(W, FLOOR + 0.6, 1.25);
+    const doorLab = redMark('「とびらがとじている」', 0.5); doorLab.position.set(W - 0.12, FLOOR + 0.55, 1.25); sh.grp.add(doorLab);
+    // 過去の人（現在だけ）：仕切りの壁の鍵穴の場所で何かをしている
+    const gh = makeGhost(); gh.g.position.set(PX - 0.45, FLOOR, -0.1); sh.grp.add(gh.g);
+    const crateOpen = () => { crate.opening = 0; };
+    const targets = {
+      tbox: { pos: TB.clone(), act: () => era === 'past' && (!!F.seen.s5_tbox_d || !!F.ev.tbox_real), hidden: 's5_tbox', label: tbLab,
+        canSee: () => !!F.ev.tbox_real && !F.ev.tbox_open,
+        real: { seen: 's5_tbox_d', flag: 'tbox_real', msg: '透明な箱が、実体になった。' },
+        edit: { text: 'はこがある', goal: 'はこがあく', flag: 'tbox_open', done() { F.ev.tbox_open = true; crateOpen(); say('箱が開いた。'); } },
+        examine() {
+          if (!F.ev.tbox_real) { say('透明な何かがある。'); return; }
+          if (F.ev.tbox_open) { say('開いた箱だ。'); return; }
+          say(F.seen.s5_tbox ? '「はこがある」' : '箱だ。');
+        } },
+      key: { pos: KP.clone().add(V(0, 0.05, 0)), act: () => era === 'past' && !!F.ev.tbox_open && !F.ev.hasKey && !F.ev.s5_door,
+        examine() { F.ev.hasKey = true; say('鍵を拾った'); } },
+      keyhole: { pos: khPos, act: () => era === 'past' && !!F.seen.ghost_s5,
+        examine() {
+          if (F.ev.s5_door) { say('鍵がささっている。'); return; }
+          if (!F.ev.hasKey) { say('壁に鍵穴がある。'); return; }
+          F.ev.hasKey = false; F.ev.s5_door = true; quake(0.8); rumble(1.0);
+          say('鍵をさした。壁に扉があらわれた。', null, true);
+        } },
+      door: { pos: DP, act: () => era === 'future' && !!F.ev.s5_door, hidden: 's5_door', label: doorLab, canSee: () => !F.ev.s5_melt,
+        edit: { text: 'とびらがとじている', goal: 'とびらがとけている', flag: 's5_melt', done() { F.ev.s5_melt = true; fadeDark(door.dark, 0.9); say('とびらがとけてなくなった'); } },
+        examine() {
+          if (F.ev.s5_melt) { goRoom('c5'); return; }
+          say(F.seen.s5_door ? '「とびらがとじている」' : '扉は閉まっている。');
+        } }
+    };
+    let gclock = 0;
+    const tick = dt => {
+      for (const e of ERAS) { part[e].visible = e === era; if (part[e].userData.edge) part[e].userData.edge.visible = e === era; plant[e].visible = e === era; }
+      kh.visible = era === 'past';
+      // 透明な箱：過去だけ。緑の光を当てている間は点線で見える。実体になったら箱
+      const inPast = era === 'past';
+      const glit = inPast && lit('green', TB);
+      if (glit) F.seen.s5_tbox_d = true;
+      tbLines.material.opacity += ((glit && !F.ev.tbox_real ? 1 : 0) - tbLines.material.opacity) * Math.min(1, dt * 8);
+      tbLines.visible = tbLines.material.opacity > 0.02;
+      crate.g.visible = inPast && !!F.ev.tbox_real;
+      key.visible = inPast && !!F.ev.tbox_open && !F.ev.hasKey && !F.ev.s5_door;
+      door.g.visible = !!F.ev.s5_door; if (F.ev.s5_melt) door.dark.material.opacity = 1;
+      crateTick(crate, dt);
+      // 過去の人：現在だけ、青い光の間
+      const blueOn = lightColor() === 'blue' && !insp && era === 'present';
+      if (blueOn) gclock += dt;
+      gh.arm.rotation.z = Math.sin(gclock * 6) * 0.5 + 0.7; gh.g.lookAt(PX, FLOOR, -0.1); gh.g.rotateY(Math.PI);
+      gh.mat.opacity += ((blueOn ? 0.95 : 0) - gh.mat.opacity) * Math.min(1, dt * 8); gh.g.visible = gh.mat.opacity > 0.02;
+      if (blueOn && inView(gh.g.position.clone().add(V(0, 1.0, 0)), 0.7)) F.seen.ghost_s5 = true;
+    };
+    const onEnter = () => {
+      if (F.paintGB) return;
+      F.paintGB = true; softFlash('green');
+      say('何かが変わった気がする', () => startHint(false), true);
+    };
+    return { grp: sh.grp, targets, tick, onEnter, time: true };
+  },
+
+  // ---- 通路5：隔壁に赤で「HOLD」→「HOLE」 ----
+  c5: () => {
+    const F = G.flags, C = corridor(null, { noTerm: true }); C.build();
+    const { W, D, sh } = C;
+    const bulk = makeBulk(1.2, 2.2); placeOn(bulk.g, 'right', W, D, 0, 0, 0.004); sh.grp.add(bulk.g);
+    if (F.ev.c5_hole) bulk.plate.position.y = 2.1;
+    const lab = redMark('「HOLD」', 0.55); lab.position.set(W - 0.12, FLOOR + 2.0, 0); sh.grp.add(lab);
+    let opening = null;
+    const targets = Object.assign(C.targets, {
+      bulk: { pos: V(W, FLOOR + 1.1, 0), act: () => true, hidden: 'c5_bulk', label: lab, canSee: () => !F.ev.c5_hole,
+        edit: { text: 'HOLD', goal: 'HOLE', flag: 'c5_hole', done() { F.ev.c5_hole = true; quake(0.8); rumble(1.0, true); opening = 0; say('隔壁に穴が開いた。'); } },
+        examine() {
+          if (F.ev.c5_hole) { goRoom('s6'); return; }
+          say(F.seen.c5_bulk ? '「HOLD」' : '隔壁が閉ざされている。');
+        } }
+    });
+    const tick = dt => { if (opening != null) { opening = Math.min(1, opening + dt / 1.2); bulk.plate.position.y = 2.1 * ease(opening); if (opening >= 1) opening = null; } };
+    return { grp: sh.grp, targets, tick };
+  },
+
+  // ---- ステージ2-2：日記は時代で変わる。箱の暗証1115 → 中のボタン → 透明な壁のボタン（緑） → 時計「２０：３４」→「１０：３４」で昼 → 扉 ----
+  s6: () => {
+    const W = 2.5, D = 2.5, F = G.flags;
+    const sh = roomShell(W, D, { wall: 0xffffff, floor: 0xffffff, edge: 0x000000, gridColor: 0xd4d4d4 });
+    sh.place('front'); sh.place('back'); sh.place('left'); sh.place('right');
+    sh.grp.add(segs([...rect2(-1.2, -0.9, 1.2, 0.9), ...rect2(-1.05, -0.75, 1.05, 0.75)].map(p => [p[0], FLOOR + 0.004, p[1]])));
+    // ベッド（左前）
+    const bed = new THREE.Group(); bed.add(solidBox(0.95, 0.45, 1.95, 0xffffff)); const pil = solidBox(0.6, 0.12, 0.32, 0xffffff); pil.position.set(0, 0.28, -0.72); bed.add(pil);
+    bed.position.set(-1.95, FLOOR + 0.225, -1.2); sh.grp.add(bed);
+    // 本棚（正面の壁、左寄り）
+    const shelf = new THREE.Group(); shelf.add(solidBox(1.1, 1.8, 0.32, 0xffffff));
+    const bl = []; for (const y of [-0.45, 0.05, 0.55]) bl.push([-0.55, y, 0.161], [0.55, y, 0.161]);
+    for (let i = 0; i < 14; i++) { const x = -0.5 + i * 0.07, y0 = [-0.45, 0.05, 0.55][i % 3]; bl.push([x, y0, 0.162], [x, y0 + 0.28 + (i % 4) * 0.03, 0.162]); }
+    shelf.add(segs(bl)); shelf.position.set(-0.9, FLOOR + 0.9, -D + 0.17); sh.grp.add(shelf);
+    // 机（正面の壁、右寄り）と日記
+    const desk = new THREE.Group(); const top = solidBox(1.2, 0.05, 0.6, 0xffffff); top.position.y = 0.72; desk.add(top);
+    for (const [x, z] of [[-0.55, -0.25], [0.55, -0.25], [-0.55, 0.25], [0.55, 0.25]]) desk.add(segs([[x, 0, z], [x, 0.7, z]]));
+    const book = solidBox(0.3, 0.03, 0.22, 0xffffff); book.position.set(0.1, 0.76, 0.05); desk.add(book);
+    desk.position.set(1.2, FLOOR, -2.15); sh.grp.add(desk);
+    // 時計（正面の壁、机の上。ボタンを押すと現れる）
+    const clock = new THREE.Group(); const cr = []; for (let i = 0; i < 32; i++) { const a = i / 32 * Math.PI * 2, b = (i + 1) / 32 * Math.PI * 2; cr.push([Math.cos(a) * 0.25, Math.sin(a) * 0.25, 0.006], [Math.cos(b) * 0.25, Math.sin(b) * 0.25, 0.006]); }
+    const cface = new THREE.Mesh(new THREE.CircleGeometry(0.25, 32), faceMat(0xffffff)); cface.position.z = 0.003; clock.add(cface); clock.add(segs(cr));
+    const hands = new THREE.Group(); clock.add(hands);
+    const setHands = (day) => { hands.clear(); const h = day ? 10 : 20, m = 34; const ha = Math.PI / 2 - (h % 12 + m / 60) / 12 * Math.PI * 2, ma = Math.PI / 2 - m / 60 * Math.PI * 2;
+      hands.add(segs([[0, 0, 0.008], [Math.cos(ha) * 0.13, Math.sin(ha) * 0.13, 0.008], [0, 0, 0.008], [Math.cos(ma) * 0.2, Math.sin(ma) * 0.2, 0.008]])); };
+    setHands(!!F.ev.s6_day);
+    placeOn(clock, 'front', W, D, 1.2, 1.8); sh.grp.add(clock);
+    const clockPos = wallPos('front', W, D, 1.2, 1.8);
+    const clockLab = redMark('「２０：３４」', 0.5); clockLab.position.copy(clockPos).add(V(0, 0.42, 0.12)); sh.grp.add(clockLab);
+    // 鍵のかかった箱（左後ろ）と空の箱（右後ろ）
+    const lbox = makeCrate(0.6); const LB = V(-1.75, FLOOR + 0.3, 1.75); lbox.g.position.copy(LB); lbox.g.lookAt(0, LB.y, 0); sh.grp.add(lbox.g);
+    const lock = solidBox(0.1, 0.12, 0.03, 0xffffff); lock.position.set(0, 0.12, 0.32); lbox.g.add(lock);
+    if (F.ev.s6_lbox_open) { lbox.lid.rotation.x = -1.9; lock.visible = false; }
+    const box2 = makeCrate(0.6); const B2 = V(1.75, FLOOR + 0.3, 1.75); box2.g.position.copy(B2); box2.g.lookAt(0, B2.y, 0); sh.grp.add(box2.g);
+    // 透明な壁のボタン（正面の壁の真ん中）
+    const WB = wallPos('front', W, D, 0.15, 1.45);
+    const wbt = new THREE.Group(); const wbs = solidBox(0.16, 0.16, 0.05, 0xffffff); wbt.add(wbs);
+    placeOn(wbt, 'front', W, D, 0.15, 1.45, 0.03); sh.grp.add(wbt);
+    const wbg = boxLines(0.16, 0.16, 0.05, new THREE.LineDashedMaterial({ color: 0x0f8a3a, dashSize: 0.02, gapSize: 0.015, transparent: true, opacity: 0 }));
+    wbg.computeLineDistances(); placeOn(wbg, 'front', W, D, 0.15, 1.45, 0.03); sh.grp.add(wbg);
+    // 扉
+    const door = makeDoor(0x000000, 0xffffff); placeOn(door.g, 'right', W, D, 0, 0, 0.004); sh.grp.add(door.g);
+    if (F.ev.s6_door_open) door.dark.material.opacity = 1;
+    const DIARY = { past: '11月15日。大事なものを箱にしまった', present: '12月29日。掃除をした', future: '７月７日。今日は七夕だ' };
+    const targets = {
+      bed: { pos: V(-1.95, FLOOR + 0.5, -1.2), act: () => true, examine() { say('簡素なベッドだ。'); } },
+      shelf: { pos: V(-0.9, FLOOR + 1.0, -D), act: () => true, examine() { say('本棚だ。'); } },
+      desk: { pos: V(1.2, FLOOR + 0.76, -2.1), act: () => true, examine() { say(DIARY[era]); } },
+      clock: { pos: clockPos, act: () => !!F.ev.clock_on, hidden: 's6_clock', label: clockLab, canSee: () => !F.ev.s6_day,
+        edit: { text: '２０：３４', goal: '１０：３４', flag: 's6_day', done() { F.ev.s6_day = true; setHands(true); say('ひるになった。'); } },
+        examine() { if (F.ev.s6_day) say('「１０：３４」'); else say(F.seen.s6_clock ? '「２０：３４」' : '壁に時計がある。'); } },
+      lbox: { pos: LB.clone(), act: () => true,
+        examine() {
+          if (F.ev.s6_lbox_open) { say('箱の中のボタンは押した。'); return; }
+          openCode('0000', v => {
+            if (v !== '1115') { say('……箱は開かない。'); return; }
+            F.ev.s6_lbox_open = true; lock.visible = false; lbox.opening = 0;
+            say(['中にボタンがある。押してみよう', 'なにかかわったか？'], () => { F.ev.s6_pressed = true; });
+          });
+        } },
+      box2: { pos: B2.clone(), act: () => true, examine() { say('空の箱だ。'); } },
+      wbtn: { pos: WB, act: () => !!F.ev.s6_pressed && (!!F.seen.s6_wbtn_d || !!F.ev.wbtn_real),
+        real: { seen: 's6_wbtn_d', flag: 'wbtn_real', msg: '透明なボタンが、実体になった。' },
+        examine() {
+          if (!F.ev.wbtn_real) { say('透明な何かがある。'); return; }
+          if (!F.ev.clock_on) { F.ev.clock_on = true; quake(0.6); rumble(0.6); say('ボタンを押した。壁に時計がある。'); }
+          else say('壁のボタンは押した。');
+        } },
+      door: { pos: V(W, FLOOR + 1.0, 0), act: () => true,
+        examine() {
+          if (F.ev.s6_door_open) { goRoom('c6'); return; }
+          if (F.ev.s6_day) { F.ev.s6_door_open = true; fadeDark(door.dark, 0.9); say('扉が開いた。'); }
+          else say('よるはとおれない');
+        } }
+    };
+    const tick = dt => {
+      clock.visible = !!F.ev.clock_on;
+      const glit = !!F.ev.s6_pressed && lit('green', WB);
+      if (glit) F.seen.s6_wbtn_d = true;
+      wbg.material.opacity += ((glit && !F.ev.wbtn_real ? 1 : 0) - wbg.material.opacity) * Math.min(1, dt * 8); wbg.visible = wbg.material.opacity > 0.02;
+      wbt.visible = !!F.ev.wbtn_real;
+      crateTick(lbox, dt);
+      $('night').style.opacity = F.ev.s6_day ? 0 : 1;
+    };
+    return { grp: sh.grp, targets, tick, time: true, onLeave: () => { $('night').style.opacity = 0; } };
+  },
+
+  // ---- 通路6：手前の扉「とびらがみえている」→「きえている」、奥の扉「あなた＜とびら」→「＞」で壊す ----
+  c6: () => {
+    const F = G.flags, C = corridor(null, { noTerm: true }); C.build();
+    const { W, D, sh } = C, PX = 1.3;
+    const pw = wall(D * 2, [{ x: 0, y: 1.0, w: 1.0, h: 2.0 }], faceMat(0xc4c4c4), lineMat(0x3a3a3a)); pw.position.set(PX, FLOOR, 0); pw.rotation.y = -Math.PI / 2; sh.grp.add(pw);
+    sh.grp.add(segs([[PX, FLOOR, -D], [PX, FLOOR, D], [PX, CEIL, -D], [PX, CEIL, D]], lineMat(0x3a3a3a)));
+    const d1 = makeDoor(0x222222, 0x9c9c9c); d1.g.position.set(PX - 0.004, FLOOR, 0); d1.g.rotation.y = -Math.PI / 2; sh.grp.add(d1.g);
+    const d2 = makeDoor(0x222222, 0x9c9c9c); placeOn(d2.g, 'right', W, D, 0, 0, 0.004); sh.grp.add(d2.g);
+    if (F.ev.c6_d1_melt) d1.g.visible = false;
+    if (F.ev.c6_d2_broken) d2.dark.material.opacity = 1;
+    const l1 = redMark('「とびらがみえている」', 0.5); l1.position.set(PX - 0.12, FLOOR + 1.55, 0); sh.grp.add(l1);
+    const l2 = redMark('「あなた＜とびら」', 0.5); l2.position.set(W - 0.12, FLOOR + 1.55, 0); sh.grp.add(l2);
+    const targets = Object.assign(C.targets, {
+      d1: { pos: V(PX, FLOOR + 1.0, 0), act: () => !F.ev.c6_d1_melt, hidden: 'c6_d1', label: l1,
+        edit: { text: 'とびらがみえている', goal: 'とびらがきえている', flag: 'c6_d1_melt', done() { F.ev.c6_d1_melt = true; d1.g.visible = false; say('とびらがきえた'); } },
+        examine() { say(F.seen.c6_d1 ? '「とびらがみえている」' : '扉は閉まっている。'); } },
+      d2: { pos: V(W, FLOOR + 1.0, 0), act: () => !!F.ev.c6_d1_melt, hidden: 'c6_d2', label: l2, canSee: () => !F.ev.c6_d2_broken,
+        edit: { text: 'あなた＜とびら', goal: 'あなた＞とびら', flag: 'c6_d2_weak', done() { F.ev.c6_d2_weak = true; say('とびらが、壊せそうだ。'); } },
+        examine() {
+          if (F.ev.c6_d2_broken) { goRoom('s7'); return; }
+          if (F.ev.c6_d2_weak) { F.ev.c6_d2_broken = true; quake(1.0); rumble(1.0, true); fadeDark(d2.dark, 0.5); say('扉を壊した。'); return; }
+          say(F.seen.c6_d2 ? '「あなた＜とびら」' : '扉は閉まっている。');
+        } }
+    });
+    return { grp: sh.grp, targets };
+  },
+
+  // ---- ステージ3-1：何もない部屋。？？？の話 → 過去の人 → 黒で世界を塗る → 白い扉 ----
+  s7: () => {
+    const W = 2.5, D = 2.5, F = G.flags;
+    const sh = roomShell(W, D, { wall: 0xffffff, floor: 0xffffff, edge: 0x000000, gridColor: 0xd4d4d4 });
+    sh.place('front'); sh.place('back'); sh.place('left'); sh.place('right');
+    const back = makeBulk(1.1, 2.1); placeOn(back.g, 'left', W, D, 0, 0, 0.012); sh.grp.add(back.g);
+    // 黒く塗る球（プレイヤーの周り）。塗った三角形だけを描く
+    const sg = new THREE.SphereGeometry(2.3, 48, 24).toNonIndexed();
+    const pos = sg.attributes.position, nTri = pos.count / 3;
+    const dirs = [], area = []; let total = 0;
+    const a = V(0, 0, 0), b = V(0, 0, 0), c = V(0, 0, 0);
+    for (let i = 0; i < nTri; i++) {
+      a.fromBufferAttribute(pos, i * 3); b.fromBufferAttribute(pos, i * 3 + 1); c.fromBufferAttribute(pos, i * 3 + 2);
+      dirs.push(a.clone().add(b).add(c).normalize());
+      const ar = b.clone().sub(a).cross(c.clone().sub(a)).length() / 2; area.push(ar); total += ar;
+    }
+    const painted = new Uint8Array(nTri); let pArea = 0;
+    const blackMesh = new THREE.Mesh(sg, new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide, depthTest: false, depthWrite: false })); blackMesh.renderOrder = 5;
+    sh.grp.add(blackMesh);
+    let dirty = true;
+    const rebuild = () => { const idx = []; for (let i = 0; i < nTri; i++) if (painted[i]) idx.push(i * 3, i * 3 + 1, i * 3 + 2); sg.setIndex(idx); dirty = false; };
+    const paintTri = i => { if (!painted[i]) { painted[i] = 1; pArea += area[i]; dirty = true; } };
+    if (F.ev.s7_black_done) for (let i = 0; i < nTri; i++) paintTri(i);
+    // 白い扉（真っ黒になって15秒後、右に）
+    const wd = new THREE.Group(); const wp = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.9), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false })); wp.position.y = 0.95; wp.renderOrder = 6; wd.add(wp);
+    const wdl = segs(rect2(-0.45, 0, 0.45, 1.9, 0.002), new THREE.LineBasicMaterial({ color: 0xbbbbbb, depthTest: false })); wdl.renderOrder = 7; wd.add(wdl);
+    wd.position.set(2.1, FLOOR + 0.25, 0); wd.rotation.y = -Math.PI / 2; sh.grp.add(wd); wd.visible = !!F.ev.s7_wdoor;
+    let t = 0, t2 = 0, t3 = 0, wdT = 0;
+    const targets = {
+      back: { pos: V(-W, FLOOR + 1.0, 0), act: () => !F.ev.blackStarted, examine() { say('入ってきた通路は、ふさがっている。'); } },
+      wdoor: { pos: V(2.1, FLOOR + 1.2, 0), act: () => !!F.ev.s7_wdoor, examine() { goRoom('s8'); } }
+    };
+    const cosR = Math.cos(0.36), q = V(0, 0, 0);
+    const tick = dt => {
+      const blocked = dlg || menuOpen || codeOpen || editOpen || manualOpen || logOpen || busy || insp;
+      if (!blocked) {
+        if (!F.ev.s7_gm) { t += dt; if (t >= 20) { F.ev.s7_gm = true; say(S7_GM, () => { F.ev.s7_gm_done = true; t2 = 0; }, true); } }
+        else if (F.ev.s7_gm_done && !F.ev.blackReady) { t2 += dt; if (t2 >= 20) { F.ev.blackReady = true; t3 = 0; say('＠「あなたがこれまで得たものすべてを思い出せ」', null, true); } }
+        else if (F.ev.blackReady && !F.ev.blackStarted) { t3 += dt; if (t3 >= 20) { t3 = 0; say('＠「あなたがこれまで得たものすべてを思い出せ。世界の色を書き換えろ」', null, true); } }
+      }
+      // 黒で塗る：中央の丸の向いた所が黒くなる
+      if (blackOn()) {
+        q.copy(fwd);
+        for (let i = 0; i < nTri; i++) if (!painted[i] && dirs[i].dot(q) > cosR) { paintTri(i); F.ev.blackStarted = true; }
+      }
+      // 85%を超えたら、残りも見ている方から染まっていく
+      if (!F.ev.s7_black_done && pArea / total >= 0.85) F.ev.s7_filling = true;
+      if (F.ev.s7_filling && !F.ev.s7_black_done) {
+        const rest = []; for (let i = 0; i < nTri; i++) if (!painted[i]) rest.push(i);
+        rest.sort((x, y) => dirs[y].dot(fwd) - dirs[x].dot(fwd));
+        rest.slice(0, 30).forEach(paintTri);
+        if (rest.length <= 30) { F.ev.s7_black_done = true; wdT = 0; }
+      }
+      if (F.ev.s7_black_done && !F.ev.s7_wdoor) { wdT += dt; if (wdT >= 15) { F.ev.s7_wdoor = true; wd.visible = true; } }
+      if (dirty) rebuild();
+    };
+    const onEnter = () => { if (!F.ev.s7_closed) { F.ev.s7_closed = true; quake(0.8); rumble(1.0); } };
+    return { grp: sh.grp, targets, tick, onEnter, blackable: true };
+  },
+
+  // ---- ステージ3-2：最初の部屋。出入口がふさがる。白い光で窓が消え、橋 → 「はし」に透明な空欄 → 「はしご」 → 登る ----
+  s8: () => {
+    const W = 2.5, D = 2.5, F = G.flags;
+    const sh = roomShell(W, D, { wall: 0xffffff, floor: 0xffffff, edge: 0x000000, gridColor: 0xd4d4d4 });
+    const win = { x: 0, y: 1.55, w: 1.5, h: 0.95 };
+    const fWin = sh.place('front', [win]); const fPlain = sh.place('front'); sh.place('back'); sh.place('left'); sh.place('right');
+    const wy = FLOOR + win.y, hw = win.w / 2, hh = win.h / 2, z = -D + 0.004;
+    const frameMat = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true });
+    const frame = segs([...loop([[-hw - 0.06, wy - hh - 0.06, z], [hw + 0.06, wy - hh - 0.06, z], [hw + 0.06, wy + hh + 0.06, z], [-hw - 0.06, wy + hh + 0.06, z]]),
+      [0, wy - hh, z], [0, wy + hh, z], [-hw, wy, z], [hw, wy, z], [-hw - 0.1, wy - hh - 0.1, z + 0.08], [hw + 0.1, wy - hh - 0.1, z + 0.08]], frameMat);
+    sh.grp.add(frame);
+    const townG = new THREE.Group(); townBehind(townG, 0, 0.2, -D - 3.2, 9, 4.5); sh.grp.add(townG);
+    // 出入口のふさがった隔壁
+    const bl = makeBulk(1.1, 2.1); placeOn(bl.g, 'left', W, D, 0, 0, 0.012); sh.grp.add(bl.g);
+    const br = makeBulk(1.1, 2.1); placeOn(br.g, 'right', W, D, 0, 0, 0.012); sh.grp.add(br.g);
+    // 橋（部屋の真ん中、プレイヤーの前）と、はしご
+    const BP = V(0, FLOOR, -1.2);
+    const bridge = new THREE.Group(); const arc = [];
+    for (let i = 0; i < 16; i++) { const x0 = -0.7 + i * 0.0875, x1 = x0 + 0.0875, y0 = Math.sin((x0 + 0.7) / 1.4 * Math.PI) * 0.35, y1 = Math.sin((x1 + 0.7) / 1.4 * Math.PI) * 0.35;
+      for (const zz of [-0.3, 0.3]) arc.push([x0, y0, zz], [x1, y1, zz], [x0, y0 + 0.35, zz], [x1, y1 + 0.35, zz]);
+      arc.push([x0, y0, -0.3], [x0, y0, 0.3]); if (i % 3 === 0) for (const zz of [-0.3, 0.3]) arc.push([x0, y0, zz], [x0, y0 + 0.35, zz]); }
+    bridge.add(segs(arc)); bridge.position.copy(BP); sh.grp.add(bridge);
+    const ladder = new THREE.Group(); const ll = [[-0.25, 0, 0], [-0.25, HGT, 0], [0.25, 0, 0], [0.25, HGT, 0]];
+    for (let y = 0.3; y < HGT; y += 0.3) ll.push([-0.25, y, 0], [0.25, y, 0]);
+    ladder.add(segs(ll)); ladder.position.copy(BP); sh.grp.add(ladder);
+    const hole = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.8), new THREE.MeshBasicMaterial({ color: 0x000000 })); hole.rotation.x = Math.PI / 2; hole.position.set(0, CEIL - 0.003, -1.2); sh.grp.add(hole);
+    const brLab = redMark('「はし」', 0.5); brLab.position.copy(BP).add(V(0, 0.95, 0)); sh.grp.add(brLab);
+    let t = 0, prevLit = false;
+    const targets = {
+      window: { pos: V(0, wy, -D), act: () => !F.ev.s8_win_gone, examine() { say('窓の外に、私のいた町が見える。'); } },
+      left: { pos: V(-W, FLOOR + 1.0, 0), act: () => true, examine() { say('入ってきた扉は、ふさがっている。'); } },
+      right: { pos: V(W, FLOOR + 1.0, 0), act: () => true, examine() { say('最初に使った通路は、ふさがっている。'); } },
+      bridge: { pos: BP.clone().add(V(0, 0.4, 0)), act: () => !!F.ev.s8_bridge && !F.ev.s8_ladder, hidden: 's8_bridge', label: brLab,
+        edit: { text: 'はし', blank: true, goal: 'はしご', flag: 's8_ladder', done() { F.ev.s8_ladder = true; say('上に行けってことなのか？', null, true); } },
+        examine() { say(F.seen.s8_bridge ? '「はし」' : '部屋の真ん中に橋がある。'); } },
+      ladder: { pos: BP.clone().add(V(0, 1.2, 0)), act: () => !!F.ev.s8_ladder, examine() { say('はしごだ。上に登ってみよう。', () => climb(), true); } }
+    };
+    const tick = dt => {
+      fWin.visible = !F.ev.s8_win_gone; fPlain.visible = !!F.ev.s8_win_gone; frame.visible = townG.visible = !F.ev.s8_win_gone;
+      frameMat.opacity = F.ev.s8_win ? 0.45 : 1;
+      townG.children.forEach(m => { m.material.transparent = true; m.material.opacity = F.ev.s8_win ? 0.45 : 1; });
+      bridge.visible = !!F.ev.s8_bridge && !F.ev.s8_ladder; ladder.visible = hole.visible = !!F.ev.s8_ladder;
+      // 白い光を窓に当てるたびに、窓が薄くなり、2回で消える
+      const wl = !F.ev.s8_win_gone && lit('white', V(0, wy, -D), 0.4);
+      if (wl && !prevLit) {
+        F.ev.s8_win = (F.ev.s8_win || 0) + 1;
+        if (F.ev.s8_win >= 2) {
+          F.ev.s8_win_gone = true;
+          say('外が見えていたのは、まぼろしだったのか？', () => { F.ev.s8_bridge = true; quake(0.6); rumble(0.8);
+            say(['この橋はなんだ？', '部屋の真ん中にあるが、どこにもいけないじゃないか'], null, true); }, true);
+        }
+      }
+      prevLit = wl;
+      // 「自分だけでは…」（白い光を得るまで、20秒ごと）
+      const blocked = dlg || menuOpen || codeOpen || editOpen || manualOpen || logOpen || busy || insp;
+      if (F.ev.s8_closed && !F.white && !blocked) {
+        t += dt;
+        if (t >= 20) { t = 0; if (!F.ev.s8_hint) say(S8_30, () => { F.ev.s8_hint = true; }, true); else say('自分だけでは・・・'); }
+      }
+    };
+    const onEnter = () => { if (!F.ev.s8_closed) { F.ev.s8_closed = true; quake(0.8); rumble(1.0); say(S8_ENTER, null, true); } };
+    return { grp: sh.grp, targets, tick, onEnter };
+  },
+
+  // ---- 最終ステージ：何もない真っ白な場所。力が使えない。何もしないとWALLに囲まれる ----
+  s9: () => {
+    const F = G.flags, grp = new THREE.Group();
+    const fl = []; for (let i = 0; i < 48; i++) { const a = i / 48 * Math.PI * 2, b = (i + 1) / 48 * Math.PI * 2; fl.push([Math.cos(a) * 1.2, FLOOR, Math.sin(a) * 1.2], [Math.cos(b) * 1.2, FLOOR, Math.sin(b) * 1.2]); }
+    grp.add(segs(fl, lineMat(0xe2e2e2)));
+    // 周りを囲む文字（WALL → WILL）と、正面の NO! → GO!
+    const ring = new THREE.Group(); grp.add(ring);
+    const words = [];
+    const setRing = (txt) => {
+      ring.clear(); words.length = 0;
+      for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; const m = textPlane(txt, '#000000', 1.0, { depth: true }); m.position.set(Math.sin(a) * 2.3, 0, -Math.cos(a) * 2.3); m.lookAt(0, 0, 0); ring.add(m); words.push(m); }
+    };
+    let no = null;
+    const setNo = (txt) => { if (no) grp.remove(no); no = textPlane(txt, '#000000', 1.3, { depth: true }); no.position.set(0, 0.1, -1.8); no.lookAt(0, 0, 0); grp.add(no); };
+    let ringT = 0, rise = F.ev.s9_ring ? 1 : 0, t = 0, rep = 0, ringTalk = false, noTalk = false;
+    if (F.ev.s9_ring) setRing(F.ev.s9_wall_done ? 'WILL' : 'WALL');
+    if (F.ev.s9_no && !F.ev.s9_no_done) setNo('NO!');
+    const WALL_EDIT = { text: 'WALL', goal: 'WILL', style: 'white', flag: 's9_wall_done',
+      done() { F.ev.s9_wall_done = true; setRing('WILL'); say('やったのか・・・？', () => { F.ev.s9_no = true; setNo('NO!'); say(S9_NO, () => openEditor(NO_EDIT), true); }, true); } };
+    const NO_EDIT = { text: 'NO!', goal: 'GO!', style: 'white', flag: 's9_no_done',
+      done() { F.ev.s9_no_done = true; setNo('GO!'); setTimeout(startEnding, 1200); } };
+    const tick = dt => {
+      const blocked = dlg || menuOpen || codeOpen || editOpen || manualOpen || logOpen || busy;
+      ring.position.y = -2.6 * (1 - ease(rise)); if (rise < 1 && F.ev.s9_ring) rise = Math.min(1, rise + dt / 1.5);
+      if (blocked || !F.ev.s9_intro_done) return;
+      if (!F.ev.s9_ring) {
+        t += dt;
+        // ボタンを15秒押さなければ、周りにWALLが現れる（見回すのは操作に数えない）
+        if ((performance.now() - lastPress) / 1000 >= 15) { F.ev.s9_ring = true; setRing('WALL'); rise = 0; ringT = 0; quake(0.8); rumble(1.6, true); return; }
+        if (!F.ev.s9_hint) { if (t >= 20) { F.ev.s9_hint = true; rep = 0; say(S9_HINT, null, true); } }
+        else { rep += dt; if (rep >= 20) { rep = 0; say('まずは落ち着いて、考えよう。', null, true); } }
+      } else if (!F.ev.s9_no_done) {
+        ringT += dt;
+        if (!F.ev.s9_wall_done && !ringTalk && ringT >= 1.5) { ringTalk = true; say(S9_WALL, () => openEditor(WALL_EDIT), true); }
+        if (F.ev.s9_no && !noTalk && !dlg && F.ev.s9_wall_done && ringTalk === 'resume') { noTalk = true; say(S9_NO, () => openEditor(NO_EDIT), true); }
+      }
+    };
+    // WALLに囲まれている間は、調べるで書き換え画面を開き直せる
+    const examineAny = () => (F.ev.s9_ring && !F.ev.s9_no_done && !editOpen && !dlg) ? () => openEditor(F.ev.s9_wall_done ? NO_EDIT : WALL_EDIT) : null;
+    const onEnter = () => { if (!F.ev.s9_intro) { F.ev.s9_intro = true; say(S9_INTRO, () => { F.ev.s9_intro_done = true; lastPress = performance.now(); }, true); } else F.ev.s9_intro_done = true; };
+    if (F.ev.s9_ring && !F.ev.s9_wall_done) ringTalk = false;
+    return { grp, targets: {}, tick, onEnter, examineAny, noPower: true };
+  }
 };
 const C4_TALK = [
   '不思議の力を手に入れたようだ。', 'この力で見えないものが見え、', '何かを変えられている気がする。', 'さっきまで退屈だったが、', '何だか楽しさを感じている。',
@@ -952,6 +1392,130 @@ const C4_LETTER = [
   '＠「今の揺れで、この空間にも歪みが生じたはずだ。」', '＠「まずは赤い色を付ける力を与える」', '＠「なんとかこれで外に出てくれ。」',
   '＠「次の部屋に着く頃には、緑色と青色を付ける力も得ているはずだ」'
 ];
+const S7_GM = [
+  '？「何を迷っているんだい？」', '「・・・！！」', '？「ルールを変える力を手に入れて、満足していたのかな？」',
+  '？「でもよくよく考えてみてほしい。なぜ、書き換えられるルールが存在していたのか。」',
+  '？「結局、答えが出るようにしくまれた部屋の中で、与えられた力を勘違いしていたにすぎない。」', '「・・・」',
+  '「私は、結局あなたのルールの中にいたということか？', '？「現に、今この部屋の中の君は、何もできずに困っていた。」',
+  '？「ルールも問題も力も、与えられたものを使っていたにすぎない。」', '？「そろそろ、この時間にも飽きたな。」', '？「あとは自由にしてくれ。」'
+];
+const S8_ENTER = ['最初の部屋？', '一周してきたのか？', 'どうやら、入り口も出口もなくなったみたいだ。', '窓の外には元の世界が見えているのに。'];
+const S8_30 = ['もう助けてくれた声も聞こえない。', 'けれど、糸口が見つからない。', '自分だけではだめなのか・・・'];
+const CIRCLE_LINES = [
+  '今まで通って来た道は、円の形につながっていたのか。', '終わりなんてなかったんだ。', 'しかも、世界は思っていた方向と逆、', '外側ではなくて、常に内側にあったんだな。',
+  'これで世界に飛び込めば帰れる。', 'このゲームも終わりか。', '・・・行こう。', '・・・', '・・・', '・・・世界が近づいてくる。', 'あの日常が・・・', 'いやだ・・・。',
+  '与えられていたとしても、あの力を失うのは', 'でも、あの世界のいいなりになるのもいやだ・・・'
+];
+const S9_INTRO = [
+  'どこだここは？', '元の世界じゃないよな？', 'だとしたらあっちの世界？', '・・・', '・・・！？', '・・・力が使えない？',
+  '元の世界もいやだ。あっちの世界のいいなりにもなりたくない。', 'そう願った結末がこれか。', 'ここでどうしたら。', 'おい！これも見てるのか？', '・・・', '何もないのか。ここには'
+];
+const S9_HINT = ['何もできないのか。', 'いやまずは落ち着いて考えよう。', 'まずは世界をよく見ることからはじめよう。', '結局はそうしてきたんだ。'];
+const S9_WALL = [
+  'なんだ？「WALL」・・・壁ってことか？', '実体はないし、すり抜けるのに、進めない', '心が拒絶しているのか', '自分の意識が、意志が・・・',
+  '・・・', '・・・元の世界に似ているかも。', '周りの目が、言葉が、世界が壁に見えていた。', 'なぜか息苦しくて・・・。',
+  '・・・', '・・・いや、そうじゃない。', 'この壁を作っているのは、自分自身', 'あの世界の力がなくても、', '意味は・・・、',
+  '見方は・・・、', '過去は・・・、', '自分次第・・・', '与えられるのではなく、', '自分の意志でつかむ'
+];
+const S9_NO = ['行くなってことか？', '進むなってことか？', 'いや、自分自身が自分にNOと言っているのか？', '・・・', '違う・・・', '自分の意志で・・・', '行け！！'];
+const EPILOGUE = [
+  '結局、世界はずっと自分のそばにあった', '自分自身が見ようとしていないだけだった', 'あの不思議な力はなくなったけど', 'あの世界がなんだったのかはわからないけど',
+  '世界は案外自分次第なのかもしれない', '・・・そう思うだろ？', '・・・', '・・・あの時、白の力をくれたあなたも', '・・・もしかすると今も見ているのかな', '・・・',
+  'まずは世界を見よう', '世界を知ろう', 'その中に自分が見えるのかもしれない', '・・・別に、世界も自分も見たいわけじゃないが', '前よりは・・・、ましな世界なのかな'
+];
+
+/* ================= はしごを登る → 円の場面（ムービー） ================= */
+let circ = null;
+function climb() {
+  busy = true; setLight(null); refreshUI();
+  const s = performance.now();
+  const f = () => { const k = Math.min(1, (performance.now() - s) / 1600); camera.position.y = 1.8 * ease(k); if (k < 1) requestAnimationFrame(f); };
+  f();
+  setTimeout(() => blackIn(() => {
+    camera.position.set(0, 0, 0); playing = false; busy = false; refreshUI();
+    circ = { i: 0, c: 0, t: 0 }; $('circle').hidden = false; blackOut();
+  }), 1000);
+}
+function circleAdvance() {
+  const l = CIRCLE_LINES[circ.i];
+  if (circ.c < l.length) { circ.c = l.length; return; }
+  G.log.push({ t: l, who: 'me' });
+  circ.i++; circ.c = 0;
+  if (circ.i >= CIRCLE_LINES.length) {
+    circ = null;
+    blackIn(() => { $('circle').hidden = true; loadRoom('s9'); playing = true; refreshUI(); setTimeout(() => { blackOut(); setTimeout(() => room.onEnter(), 500); }, 300); });
+  }
+}
+$('circle').addEventListener('click', () => { if (circ) circleAdvance(); });
+function drawCircle(dt) {
+  const cv2 = $('circle'), W = innerWidth, H = innerHeight;
+  if (cv2.width !== W || cv2.height !== H) { cv2.width = W; cv2.height = H; }
+  const g = cv2.getContext('2d'); circ.t += dt; circ.c = Math.min(CIRCLE_LINES[circ.i].length, circ.c + dt * 16);
+  const s = Math.min(W / 640, H / 480), ox = (W - 640 * s) / 2, oy = (H - 480 * s) / 2;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+  g.setTransform(s, 0, 0, s, ox, oy);
+  const cx = 320, cy = 190, k = Math.min(1, circ.i / 9), R = 150 - k * 70, n = 9;   // 部屋が円をつくり、中心に世界
+  g.strokeStyle = '#000'; g.lineWidth = 3; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.stroke();
+  for (let i = 0; i < n; i++) {
+    const a = -Math.PI / 2 + i * Math.PI * 2 / n + circ.t * 0.05, x = cx + Math.cos(a) * R, y = cy + Math.sin(a) * R;
+    g.fillStyle = '#fff'; g.fillRect(x - 12, y - 9, 24, 18); g.strokeRect(x - 12, y - 9, 24, 18);
+  }
+  const wr = 20 + k * 40; g.fillStyle = '#bbb';
+  for (let i = -3; i <= 3; i++) { const bh = wr * (0.6 + ((i * 7 + 21) % 5) / 6); g.fillRect(cx + i * wr / 3.2 - wr / 8, cy + wr * 0.5 - bh, wr / 4, bh); }
+  g.strokeStyle = '#000'; g.beginPath(); g.arc(cx, cy, wr * 0.9, 0, Math.PI * 2); g.stroke();
+  const line = CIRCLE_LINES[circ.i];
+  g.fillStyle = '#000'; g.font = `20px DotGothic16, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(line.slice(0, Math.floor(circ.c)), 320, 400);
+  if (circ.c >= line.length && Math.floor(performance.now() / 500) % 2 === 0) { g.font = `14px DotGothic16, sans-serif`; g.fillText('▼', 320, 440); }
+}
+
+/* ================= 結末：白い世界が透けて、カメラの現実が見えてくる → 暗くなる → エピローグ ================= */
+let ending = null, epi = null;
+function startEnding() {
+  busy = true; setLight(null); refreshUI(); $('tl').hidden = $('tr').hidden = true;
+  const white = new THREE.Mesh(new THREE.SphereGeometry(3, 32, 16), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1, side: THREE.BackSide, depthWrite: false }));
+  scene.add(white);
+  // カメラが使えないときは、描いた町が周りに透けて見える
+  const town = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 4.5, 4.5, 48, 1, true), new THREE.MeshBasicMaterial({ map: townTexture().clone(), side: THREE.BackSide }));
+  town.material.map.wrapS = THREE.RepeatWrapping; town.material.map.repeat.set(4, 1); town.material.map.needsUpdate = true; town.position.y = 0.4;
+  ending = { t: 0, white, town, cam: false, dark: false };
+  const v = $('cam');
+  if (window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false }).then(s => {
+      if (!ending) { s.getTracks().forEach(t => t.stop()); return; }
+      v.srcObject = s; v.hidden = false; const p = v.play(); if (p && p.catch) p.catch(() => {});
+      ending.cam = true; ending.stream = s;
+    }).catch(() => { if (ending) scene.add(town); });
+  } else scene.add(town);
+  setTimeout(() => { if (ending && !ending.cam && !town.parent) scene.add(town); }, 2500);
+}
+function endingTick(dt) {
+  const e = ending; e.t += dt;
+  const k = Math.min(1, e.t / 10);
+  e.white.material.opacity = 1 - k;
+  if (room && room.grp) room.grp.traverse(o => { if (o.material) { o.material.transparent = true; o.material.opacity = Math.min(o.material.opacity, 1 - k); } });
+  renderer.setClearColor(0xffffff, e.cam ? 1 - k : 1);
+  if (e.t > 7.5 && !e.dark) {   // 現実が見え始めたところで、ゆっくり暗くなる
+    e.dark = true; const b = $('black'); b.style.transition = 'opacity 3s'; $('btext').textContent = ''; b.classList.remove('clear');
+    setTimeout(() => {
+      if (e.stream) e.stream.getTracks().forEach(t => t.stop()); $('cam').hidden = true;
+      b.style.transition = ''; ending = null; busy = false; playing = false; refreshUI();
+      epi = { i: 0, c: 0, done: false };
+    }, 3600);
+  }
+}
+function epiAdvance() {
+  if (epi.done) { if (epi.titleShown) location.reload(); return; }
+  const l = EPILOGUE[epi.i];
+  if (epi.c < l.length) { epi.c = l.length; return; }
+  epi.i++; epi.c = 0;
+  if (epi.i >= EPILOGUE.length) {   // 最後に「Colors」が出て、「s」だけが薄くなる
+    epi.done = true; const bt = $('btext');
+    bt.innerHTML = '<span class="title" style="opacity:0;transition:opacity 3s">Color<span class="s">s</span></span>';
+    requestAnimationFrame(() => { bt.firstChild.style.opacity = 1; });
+    setTimeout(() => { const sEl = bt.querySelector('.s'); if (sEl) sEl.style.opacity = 0.2; epi.titleShown = true; }, 3800);
+  }
+}
 function crateTick(box, dt) {
   if (box.opening != null) { box.opening = Math.min(1, box.opening + dt / 0.7); box.lid.rotation.x = -1.9 * ease(box.opening); if (box.opening >= 1) box.opening = null; }
 }
@@ -1058,55 +1622,91 @@ function refreshUI() {
   const showPads = playing && !dlg && !codeOpen && !editOpen && !busy && (!insp || hold);
   $('dialog').hidden = !dlg;
   $('padL').hidden = $('padR').hidden = !showPads;
-  for (const id in unlocked) $(id).hidden = !unlocked[id];
+  const noPower = room && room.noPower;   // 最終ステージ：力が使えない
+  for (const id in unlocked) $(id).hidden = !unlocked[id] || (noPower && id !== 'btnLook');
   if (hold) { const f = insp.opt.examineHeld && insp.opt.examineHeld(); $('btnLook').hidden = !f; $('btnLook').disabled = !f; }
   $('padBack').hidden = !hold || !!dlg;
   $('tl').hidden = $('tr').hidden = !playing;
   $('reticle').hidden = !playing || !!insp;
+  // 時代の表示（時代が変わる部屋だけ）
+  const er = $('era');
+  er.hidden = !(playing && room && room.time);
+  if (!er.hidden) er.innerHTML = ERAS.map(x => x === era ? `<b>${ERA_LABEL[x]}</b>` : ERA_LABEL[x]).join('・');
   if (!showPads || manualOpen || menuOpen || logOpen) setLight(null);
   document.body.classList.toggle('paint', paintMode);
 }
 
-/* ================= 光（赤・緑・青） ================= */
+/* ================= 時代（2-1・2-2）：色づけの青で切り替わる ================= */
+const ERAS = ['past', 'present', 'future'], ERA_LABEL = { past: '過去', present: '現在', future: '未来' };
+let era = 'present';
+function setEra(e) {
+  era = e; const t = $('eraTint');
+  t.style.background = e === 'past' ? 'rgba(150,110,50,.10)' : e === 'future' ? 'rgba(40,70,140,.10)' : 'transparent';
+  refreshUI();
+}
+
+/* ================= 光（赤・緑・青・白） ================= */
 const held = { red: false, green: false, blue: false };
+const pheld = { red: false, green: false, blue: false };   // 色づけのとき押しているボタン（3つ同時の判定用）
 let paintMode = false;
+const allHeld = h => h.red && h.green && h.blue;
 function lightColor() {
   if (paintMode) return null;
+  if (allHeld(held) && G.flags.white) return 'white';
   for (const c of COLORS) if (held[c]) return c;
   return null;
 }
+// 色づけで3つ同時に押し続けている間は、黒で塗る（3-1）
+function blackOn() { return paintMode && allHeld(pheld) && !!G.flags.ev.blackReady && room && room.blackable && !insp; }
 function setLight(c, on) {
-  if (c === null) { for (const k of COLORS) held[k] = false; }
+  if (c === null) { for (const k of COLORS) { held[k] = false; pheld[k] = false; } }
   else held[c] = on;
   for (const k of COLORS) $('btn' + k[0].toUpperCase() + k.slice(1)).classList.toggle('on', held[k] && !paintMode);
   const lc = lightColor();
   $('light').className = lc ? 'on ' + lc : '';
 }
+let lastPress = performance.now();   // 最後にボタンを押した時刻（最終ステージの「何もしない」の判定）
+function colorDown(c) {
+  lastPress = performance.now();
+  if (dlg || codeOpen || editOpen) return;
+  if (!paintMode) { setLight(c, true); return; }
+  // 色づけ：すぐには塗らず、少し待って3つ同時（黒）かどうかを見分ける
+  pheld[c] = true;
+  const tok = {}; pheld['t' + c] = tok;
+  setTimeout(() => {
+    if (pheld['t' + c] !== tok) return;
+    if (allHeld(pheld) || (G.flags.ev.blackReady && room && room.blackable && [pheld.red, pheld.green, pheld.blue].filter(Boolean).length >= 2)) return;
+    paint(c);
+  }, 160);
+}
+function colorUp(c) { if (held[c]) setLight(c, false); pheld[c] = false; }
 for (const c of COLORS) {
   const b = $('btn' + c[0].toUpperCase() + c.slice(1));
-  b.addEventListener('pointerdown', e => {
-    e.preventDefault(); b.setPointerCapture(e.pointerId);
-    if (dlg || codeOpen || editOpen) return;
-    if (paintMode) { paint(c); return; }
-    setLight(c, true);
-  });
-  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(n => b.addEventListener(n, () => { if (held[c]) setLight(c, false); }));
+  b.addEventListener('pointerdown', e => { e.preventDefault(); b.setPointerCapture(e.pointerId); colorDown(c); });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(n => b.addEventListener(n, () => colorUp(c)));
 }
 document.addEventListener('contextmenu', e => e.preventDefault());
 // 光と色づけの切り替え
 function toggleModeLabels() { const bs = $('btnMode').querySelectorAll('b'); bs[0].classList.toggle('cur', !paintMode); bs[1].classList.toggle('cur', paintMode); }
 function toggleMode() {
-  if (!G.flags.redPaint) return;
+  if (!G.flags.redPaint || (room && room.noPower)) return;
   paintMode = !paintMode; setLight(null); toggleModeLabels(); refreshUI();
 }
 $('btnMode').addEventListener('click', toggleMode);
-// 色をつける：赤＝光で見つけた言葉を書き換える（中央の丸を合わせて）
+// 色をつける：赤＝光で見つけた言葉を書き換える／緑＝緑の光で見つけた透明なものを実体にする／青＝部屋の時間を変える
 function paint(c) {
-  if (insp) return;
-  const t = aimed && room.targets[aimed];
-  if (c === 'red' && t && t.edit && t.hidden && G.flags.seen[t.hidden]) {
-    if (G.flags.ev[t.edit.flag]) { say('「' + t.edit.goal + '」'); return; }
-    openEditor(t.edit); return;
+  if (insp || dlg || !room || room.noPower) return;
+  const F = G.flags, t = aimed && room.targets[aimed];
+  if (c === 'red') {
+    if (t && t.edit && t.hidden && F.seen[t.hidden]) {
+      if (F.ev[t.edit.flag]) { say('「' + t.edit.goal + '」'); return; }
+      openEditor(t.edit); return;
+    }
+  } else if (c === 'green' && F.paintGB) {
+    const r = t && t.real;
+    if (r && F.seen[r.seen] && !F.ev[r.flag]) { F.ev[r.flag] = true; softFlash('green'); say(r.msg || '実体になった。'); return; }
+  } else if (c === 'blue' && F.paintGB) {
+    if (room.time) { setEra(ERAS[(ERAS.indexOf(era) + 1) % 3]); softFlash('blue'); return; }
   }
   say('何も起きない。');
 }
@@ -1167,32 +1767,63 @@ function openManual() {
     { el: $('btnLook'), text: '調べる：中央の丸を合わせて押す', side: 'l', dy: -30 },
     { el: $('btnRed'), text: F.redPaint ? '赤：押している間、赤い光が出る\n色づけのとき：赤い色をつける' : '赤：押している間、赤い光が出る', side: 'l', dy: 10 },
     { el: $('btnMode'), text: '光⇄色：光と色づけの切り替え', side: 'r', dy: -26 },
-    { el: $('btnGreen'), text: '緑：押している間、緑の光が出る', side: 'r', dy: -6 },
-    { el: $('btnBlue'), text: '青：押している間、周りに青い光が出る', side: 'r', dy: 26 }
+    { el: $('btnGreen'), text: F.paintGB ? '緑：押している間、緑の光が出る\n色づけのとき：透明なものを実体にする' : '緑：押している間、緑の光が出る', side: 'r', dy: F.paintGB ? -14 : -6 },
+    { el: $('btnBlue'), text: F.paintGB ? '青：押している間、周りに青い光が出る\n色づけのとき：部屋の時間を変える' : '青：押している間、周りに青い光が出る', side: 'r', dy: F.paintGB ? 34 : 26 }
   ];
+  if (F.white || F.ev.blackReady) items.push({ el: $('gb'), text: (F.white ? '赤・緑・青を同時に押し続ける：白い光' : '') + (F.white && F.ev.blackReady ? '\n' : '') + (F.ev.blackReady ? '色づけのとき、3つ同時に押し続ける：黒で塗る' : ''), side: 'r', up: true });
   const svg = $('mSvg'), labs = $('mLabels'); svg.innerHTML = ''; labs.innerHTML = '';
   const W = innerWidth, H = innerHeight;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const line = (x1, y1, x2, y2) => { const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    ln.setAttribute('x1', x1); ln.setAttribute('y1', y1); ln.setAttribute('x2', x2); ln.setAttribute('y2', y2); ln.setAttribute('stroke', '#fff'); ln.setAttribute('stroke-width', '2'); svg.appendChild(ln); };
+  const mk = text => { const lab = document.createElement('div'); lab.className = 'lab'; lab.textContent = text; labs.appendChild(lab); return lab; };
+  const LEFT = [$('btnMode'), $('btnGreen'), $('btnBlue'), $('gb')], RIGHT = [$('btnLook'), $('btnRed')];
+  // 左手側（光⇄色・緑・青・3つ同時）：左のボタンの右に、下から順に積む
+  const lefts = items.filter(it => LEFT.includes(it.el) && !it.el.hidden);
+  const padR0 = $('padL').getBoundingClientRect();
+  let y = padR0.bottom - 4;
+  for (const it of lefts.slice().reverse()) {
+    const lab = mk(it.text), lw = lab.offsetWidth, lh = lab.offsetHeight;
+    y -= lh + 8; const lx = padR0.right + 70;
+    lab.style.left = lx + 'px'; lab.style.top = y + 'px';
+    const r = it.el.getBoundingClientRect();
+    line(it.el === $('gb') ? r.left + r.width / 2 : r.right, it.el === $('gb') ? r.top : r.top + r.height / 2, lx, y + lh / 2);
+  }
+  // 右手側（調べる・赤）：右のボタンの左に、下から順に積む
+  const rights = items.filter(it => RIGHT.includes(it.el) && !it.el.hidden);
+  const padRR = $('padR').getBoundingClientRect();
+  y = padRR.bottom - 4;
+  for (const it of rights.slice().reverse()) {
+    const lab = mk(it.text), lw = lab.offsetWidth, lh = lab.offsetHeight;
+    y -= lh + 8; const lx = padRR.left - 70 - lw;
+    lab.style.left = lx + 'px'; lab.style.top = y + 'px';
+    const r = it.el.getBoundingClientRect(); line(r.left, r.top + r.height / 2, lx + lw, y + lh / 2);
+  }
+  // 上の角と、見回す
   for (const it of items) {
-    if (it.el.hidden) continue;
+    if (LEFT.includes(it.el) || RIGHT.includes(it.el) || it.el.hidden) continue;
     const r = it.el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-    const lab = document.createElement('div'); lab.className = 'lab'; lab.textContent = it.text; labs.appendChild(lab);
-    const lw = lab.offsetWidth, lh = lab.offsetHeight;
-    let lx, ly, ax, ay;
-    if (it.side === 'r') { lx = Math.min(W - lw - 12, r.right + 40); ly = cy - lh / 2 + (it.dy || 0); ax = r.right; ay = cy; }
-    else if (it.side === 'l') { lx = Math.max(12, r.left - lw - 40); ly = cy - lh / 2 + (it.dy || 0); ax = r.left; ay = cy; }
-    else { lx = cx - lw / 2; ly = cy - 70 - lh; ax = cx; ay = r.top; }
-    if (it.up) { ly = r.top - lh - 70; ax = cx; ay = r.top; }
-    ly = Math.max(12, Math.min(H - lh - 70, ly));
+    const lab = mk(it.text), lw = lab.offsetWidth, lh = lab.offsetHeight;
+    let lx, ly;
+    if (it.side === 'r') { lx = r.right + 40; ly = cy - lh / 2; line(r.right, cy, lx, ly + lh / 2); }
+    else if (it.side === 'l') { lx = r.left - lw - 40; ly = cy - lh / 2 + (it.dy || 0); line(r.left, cy, lx + lw, ly + lh / 2); }
+    else { lx = cx - lw / 2; ly = cy - 70 - lh; line(cx, r.top, cx, ly + lh); }
     lab.style.left = lx + 'px'; lab.style.top = ly + 'px';
-    const tx = it.side === 'r' && !it.up ? lx : (it.side === 'l' ? lx + lw : Math.min(lx + lw / 2, lx + 30)), ty = it.side === 'c' || it.up ? ly + lh : ly + lh / 2;
-    const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    ln.setAttribute('x1', ax); ln.setAttribute('y1', ay); ln.setAttribute('x2', tx); ln.setAttribute('y2', ty);
-    ln.setAttribute('stroke', '#fff'); ln.setAttribute('stroke-width', '2'); svg.appendChild(ln);
+  }
+  if (room && room.id === 's8' && F.ev.s8_hint && !F.white) {
+    whitePending = true;
+    const r = $('padL').getBoundingClientRect(), wb = document.createElement('div'); wb.className = 'whiteBtn';
+    wb.style.left = (r.left + 4) + 'px'; wb.style.top = (r.top - 96) + 'px'; labs.appendChild(wb);
+    setTimeout(() => wb.classList.add('show'), 300);
   }
 }
+let whitePending = false;
 $('manClose').addEventListener('click', () => {
   manualOpen = false; $('manual').hidden = true; document.body.classList.remove('manual');
+  if (whitePending) {   // 操作方法を閉じると、白い光が使えるようになる
+    whitePending = false; G.flags.white = true; menuOpen = false; $('menu').hidden = true; refreshUI();
+    say('何かが変わった気がする', null, true); return;
+  }
   $('menu').hidden = false; refreshUI();
 });
 
@@ -1227,13 +1858,25 @@ const KANA_PAGES = [
 ];
 let ed = null;
 function openEditor(edit) {
-  ed = { edit, orig: [...edit.text], chars: [...edit.text], sel: 0, page: 0 };
+  const F = G.flags, orig = [...edit.text];
+  ed = { edit, orig, chars: orig.slice(), sel: 0, page: 0, blank: null, mode: 'light' };
+  if (edit.blank) {   // 透明な空欄：書き換え画面の中で、緑の光で見つけ、緑の色で実体にする
+    ed.blank = { idx: orig.length, key: edit.flag };
+    ed.orig.push('　'); ed.chars.push('　');
+  }
+  $('editor').classList.toggle('white', edit.style === 'white');
   editOpen = true; $('editor').hidden = false; setLight(null); renderEditor(); refreshUI();
 }
+const blankSeen = () => !!(ed.blank && G.flags.seen['blank_' + ed.blank.key]);
+const blankReal = () => !!(ed.blank && G.flags.ev['blankreal_' + ed.blank.key]);
 function renderEditor() {
   const w = $('edWord'); w.textContent = '';
   ed.chars.forEach((ch, i) => {
+    const isBlank = ed.blank && i === ed.blank.idx;
+    if (isBlank && !blankSeen() && !blankReal()) return;
     const b = document.createElement('button'); b.textContent = ch;
+    if (isBlank && !blankReal()) { b.className = 'blankSeen'; b.disabled = true; w.appendChild(b); return; }
+    if (isBlank) b.classList.add('blankReal');
     if (i === ed.sel) b.classList.add('sel'); if (ch !== ed.orig[i]) b.classList.add('chg');
     b.onclick = () => { ed.sel = i; renderEditor(); }; w.appendChild(b);
   });
@@ -1248,12 +1891,30 @@ function renderEditor() {
       g.appendChild(b);
     }
   }
+  // 空欄のある言葉で、緑を持っているときだけ：光⇄色と緑
+  const tools = $('edTools'); tools.textContent = '';
+  tools.hidden = !(ed.blank && G.flags.green && !blankReal());
+  if (!tools.hidden) {
+    const m = document.createElement('button'); m.innerHTML = ed.mode === 'light' ? '<b class="cur">光</b>⇄色' : '光⇄<b class="cur">色</b>';
+    m.onclick = () => { ed.mode = ed.mode === 'light' ? 'paint' : 'light'; renderEditor(); };
+    const gb = document.createElement('button'); gb.textContent = '緑'; gb.className = 'edGreen';
+    gb.onpointerdown = e => {
+      e.preventDefault();
+      if (ed.mode === 'light') { G.flags.seen['blank_' + ed.blank.key] = true; $('editor').classList.add('greenLit'); renderEditor(); }
+      else if (blankSeen() && !blankReal()) { G.flags.ev['blankreal_' + ed.blank.key] = true; softFlash('green'); renderEditor(); }
+    };
+    gb.onpointerup = gb.onpointerleave = () => $('editor').classList.remove('greenLit');
+    tools.append(m, gb);
+  }
 }
-function pickChar(ch) { ed.chars = ed.orig.slice(); ed.chars[ed.sel] = ch; renderEditor(); }   // 1か所だけ：ほかの場所を変えていたら元に戻す
+function pickChar(ch) {   // 1か所だけ：ほかの場所を変えていたら元に戻す
+  if (ed.blank && ed.sel === ed.blank.idx && !blankReal()) return;
+  ed.chars = ed.orig.slice(); ed.chars[ed.sel] = ch; renderEditor();
+}
 function closeEditor(submit) {
-  const e = ed; editOpen = false; $('editor').hidden = true; ed = null; refreshUI();
+  const e = ed; editOpen = false; $('editor').hidden = true; $('editor').classList.remove('greenLit'); ed = null; refreshUI();
   if (!submit) return;
-  if (e.chars.join('') === e.edit.goal) { softFlash('red'); e.edit.done(); }
+  if (e.chars.join('').replace(/　/g, '') === e.edit.goal) { softFlash('red'); e.edit.done(); }
   else say('何も起きない。');
 }
 $('edOk').addEventListener('click', () => closeEditor(true));
@@ -1287,9 +1948,10 @@ function openDoorAnim(door, cb) { busy = true; refreshUI(); fadeDark(door.dark, 
 function blackIn(cb) { $('btext').textContent = ''; $('black').classList.remove('clear'); setTimeout(cb, 650); }
 function blackOut() { $('black').classList.add('clear'); }
 function loadRoom(id) {
-  if (room) scene.remove(room.grp);
+  if (room) { scene.remove(room.grp); if (room.onLeave) room.onLeave(); }
+  camera.position.set(0, 0, 0);
   const r = ROOMS[id]();
-  room = Object.assign({ id }, r); scene.add(room.grp);
+  room = Object.assign({ id }, r); scene.add(room.grp); setEra('present');
   needCalib = true; if (mode !== 'gyro') { dragYaw = 0; dragPitch = 0; }
 }
 let endShown = false;
@@ -1297,7 +1959,7 @@ function goRoom(id) {
   busy = true; setLight(null); refreshUI();
   blackIn(() => {
     if (!ROOMS[id]) { busy = false; playing = false; refreshUI(); $('btext').textContent = 'つづく'; endShown = true; return; }
-    loadRoom(id); busy = false; refreshUI(); setTimeout(blackOut, 200);
+    loadRoom(id); busy = false; refreshUI(); setTimeout(() => { blackOut(); if (room.onEnter) setTimeout(() => room.onEnter(), 500); }, 200);
   });
 }
 
@@ -1318,7 +1980,7 @@ function proAdvance() {
   pro.i++; pro.c = 0;
   if (pro.i >= PROLOGUE.length) { pro = null; $('btext').textContent = ''; introT = 0; $('noise').hidden = false; rumble(1.8, true); }
 }
-$('black').addEventListener('click', () => { if (pro) proAdvance(); else if (endShown) location.reload(); });
+$('black').addEventListener('click', () => { if (pro) proAdvance(); else if (epi) epiAdvance(); else if (endShown) location.reload(); });
 function drawNoise(k) {
   const c = $('noise'); if (c.width !== innerWidth) { c.width = innerWidth; c.height = innerHeight; }
   const g = c.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, c.width, c.height);
@@ -1374,10 +2036,14 @@ function toast(s) { const el = $('toast'); el.textContent = s; el.classList.add(
 /* ================= キーボード（パソコンでの確認用） ================= */
 const keys = new Set();
 const KEYC = { KeyJ: 'red', KeyK: 'green', KeyL: 'blue' };
+window.addEventListener('pointerdown', e => { if (e.target.closest && e.target.closest('button')) lastPress = performance.now(); }, true);
 window.addEventListener('keydown', e => {
+  lastPress = performance.now();
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
   if (e.repeat) return; keys.add(e.code);
   if (pro) { if (['KeyE', 'Enter', 'Space'].includes(e.code)) proAdvance(); return; }
+  if (circ) { if (['KeyE', 'Enter', 'Space'].includes(e.code)) circleAdvance(); return; }
+  if (epi) { if (['KeyE', 'Enter', 'Space'].includes(e.code)) epiAdvance(); return; }
   if (codeOpen) {
     const n = codeVal.length;
     if (e.code === 'ArrowUp') { codeVal[codePos] = (codeVal[codePos] + 1) % 10; renderCode(); }
@@ -1399,14 +2065,15 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyQ') toggleMode();
   if (['KeyE', 'Enter'].includes(e.code) && !$('btnLook').hidden && !$('btnLook').disabled) examine();
   const c = KEYC[e.code];
-  if (c && G.flags[c] && !$('padR').hidden) { if (paintMode) paint(c); else setLight(c, true); }
+  if (c && G.flags[c] && !$('padR').hidden && !(room && room.noPower)) colorDown(c);
 });
-window.addEventListener('keyup', e => { keys.delete(e.code); const c = KEYC[e.code]; if (c && held[c]) setLight(c, false); });
+window.addEventListener('keyup', e => { keys.delete(e.code); const c = KEYC[e.code]; if (c) colorUp(c); });
 window.addEventListener('blur', () => { keys.clear(); setLight(null); });
 
 /* ================= 調べる ================= */
 let aimed = null;
 function examine() {
+  if (room && room.examineAny && room.examineAny()) { room.examineAny()(); return; }
   if (insp) { const f = insp.opt.examineHeld && insp.opt.examineHeld(); if (f) { f(); refreshUI(); } return; }
   if (aimed && room.targets[aimed]) room.targets[aimed].examine();
 }
@@ -1436,6 +2103,9 @@ function loopFrame(now) {
   if (introT >= 0) { introT += dt; drawNoise(Math.max(0, 1 - introT / 1.8)); if (introT > 2.0) { introT = -1; $('noise').hidden = true; beginS1(); } }
   if (pro) { pro.c = Math.min(PROLOGUE[pro.i].length, pro.c + dt * 14); $('btext').textContent = PROLOGUE[pro.i].slice(0, Math.floor(pro.c)); }
   if (dlg) { const l = dlg.lines[dlg.i].t; dlg.c = Math.min(l.length, dlg.c + dt * 18); $('dtext').textContent = l.slice(0, Math.floor(dlg.c)); $('dmore').hidden = dlg.c < l.length; }
+  if (circ) drawCircle(dt);
+  if (ending) endingTick(dt);
+  if (epi && !epi.done) { const l = EPILOGUE[epi.i]; epi.c = Math.min(l.length, epi.c + dt * 14); $('btext').textContent = l.slice(0, Math.floor(epi.c)); }
   dimS.material.opacity += ((insp && insp.state !== 'out' ? 0.6 : 0) - dimS.material.opacity) * Math.min(1, dt * 6);
   if (flashA > 0) { flashA = Math.max(0, flashA - dt * 0.4); $('flash').style.opacity = flashA; }
 
@@ -1457,9 +2127,9 @@ function loopFrame(now) {
       const t = room.targets[k]; if (!t.act()) continue;
       const a = fwd.angleTo(tmp.copy(t.pos).normalize()); if (a < best) { best = a; aimed = k; }
     }
-    if (!insp) $('btnLook').disabled = !aimed;
+    if (!insp) $('btnLook').disabled = !aimed && !(room.examineAny && room.examineAny());
     const lc = lightColor();
-    $('reticle').className = (lc === 'red' || lc === 'green') ? 'lit ' + lc : (aimed ? 'aim' : '');
+    $('reticle').className = (lc === 'red' || lc === 'green' || lc === 'white') ? 'lit ' + lc : (aimed ? 'aim' : '');
     if (insp) {
       const g = insp.obj.g;
       if (insp.state === 'hold' && insp.opt.tick) insp.opt.tick(dt);
@@ -1483,9 +2153,9 @@ Promise.race([document.fonts && document.fonts.load ? document.fonts.load('20px 
     $('tNew').disabled = false; $('tNew').textContent = 'はじめから'; $('tCont').disabled = !hasSave();
   });
 // 自動テスト用
-window.__colors = { G, get room() { return room && room.id; }, get aimed() { return aimed; }, get insp() { return insp && insp.state; }, get dlg() { return !!dlg; },
+window.__colors = { G, get room() { return room && room.id; }, get aimed() { return aimed; }, get insp() { return insp && insp.state; }, get dlg() { return !!dlg; }, get era() { return era; }, get circ() { return !!circ; }, get epi() { return !!epi; }, paint(c) { paint(c); }, setPaint(v) { paintMode = v; toggleModeLabels(); refreshUI(); }, ph(c, on) { pheld[c] = on; }, idle() { lastPress = performance.now() - 20000; },
   lookAt(x, y, z) { const v = V(x, y, z).normalize(); dragYaw = Math.atan2(-v.x, -v.z); dragPitch = Math.asin(v.y); },
-  hold(c, on) { setLight(c, !!on); }, rot(dx, dy) { if (insp) rotateHeld(dx, dy); },
+  hold(c, on) { if (c === null) setLight(null); else setLight(c, !!on); }, rot(dx, dy) { if (insp) rotateHeld(dx, dy); },
   go(id) { $('title').hidden = true; loadRoom(id); playing = true; syncUnlocked(); refreshUI(); } };
 })();
 </script>
