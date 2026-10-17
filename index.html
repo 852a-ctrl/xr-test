@@ -1,426 +1,858 @@
 <!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>
-<title>観測テスト</title>
+<title>Colors AR</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
 <style>
-/* 全画面の観測装置。白黒の線画の世界、赤だけが光。 */
+/* 白黒線画の世界の中心に立つ。ボタンは両手の親指で押せる下の左右、メニューと正面合わせは上の角。 */
 :root{
-  --paper:#ffffff; --ink:#111111; --muted:#5e5e5e; --line:#d8d8d8;
-  --red:#e01818; --dim:rgba(0,0,0,.66); --veil:rgba(255,255,255,.94);
+  --paper:#ffffff; --ink:#000000; --muted:#8a8a8a; --dim:rgba(0,0,0,.72);
+  --red:#e01818; --green:#1fa845; --blue:#2a55ff;
   --font:'DotGothic16','Hiragino Kaku Gothic ProN','Meiryo',sans-serif;
   color-scheme:light;
 }
 [hidden]{display:none!important}
+*{-webkit-tap-highlight-color:transparent;box-sizing:border-box}
 html,body{height:100%;margin:0;overflow:hidden;background:var(--paper);color:var(--ink);font-family:var(--font);
-  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
-#video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;background:var(--paper)}
-#dim{position:fixed;inset:0;background:var(--dim);z-index:1;opacity:0;transition:opacity .45s;pointer-events:none}
-#gl{position:fixed;inset:0;width:100%;height:100%;z-index:2;touch-action:none;display:block}
-#light{position:fixed;inset:0;z-index:3;pointer-events:none;opacity:0;transition:opacity .12s;
-  background:radial-gradient(circle at 50% 50%,rgba(255,24,24,.30) 0,rgba(255,24,24,.18) calc(var(--lr,120px)*.8),rgba(255,24,24,0) calc(var(--lr,120px)*1.25))}
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#light{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .12s;
+  background:radial-gradient(circle at 50% 50%,rgba(230,20,20,.26) 0,rgba(230,20,20,.15) calc(var(--lr,140px)*.8),rgba(230,20,20,0) calc(var(--lr,140px)*1.2))}
 #light.on{opacity:1}
-#reticle{position:fixed;left:50%;top:50%;width:calc(var(--lr,120px)*2);height:calc(var(--lr,120px)*2);
-  transform:translate(-50%,-50%);border:2px dashed rgba(17,17,17,.35);border-radius:50%;z-index:3;pointer-events:none;transition:border-color .12s}
-#reticle.on{border-color:rgba(224,24,24,.85);border-style:solid}
-body.inspect #reticle{opacity:0}
-#hud{position:fixed;left:0;right:0;top:0;z-index:4;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;
-  padding-top:calc(10px + env(safe-area-inset-top,0px));
-  padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px));pointer-events:none}
-.tag{background:var(--veil);border:2px solid var(--ink);padding:4px 8px;font-size:13px;line-height:1.5;font-variant-numeric:tabular-nums;white-space:pre-line;min-width:0}
-#hud button{pointer-events:auto}
-#controls{position:fixed;left:0;right:0;bottom:0;z-index:4;display:flex;justify-content:center;gap:12px;flex-wrap:wrap;
-  padding-bottom:calc(16px + env(safe-area-inset-bottom,0px));
-  padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px))}
-button{font-family:var(--font);font-size:18px;background:var(--paper);color:var(--ink);border:3px solid var(--ink);
-  padding:12px 20px;min-width:104px;cursor:pointer;touch-action:none}
-button:focus-visible{outline:3px solid var(--red);outline-offset:2px}
-button:disabled{color:#aaa;border-color:#aaa;cursor:default}
-button.small{font-size:13px;padding:5px 10px;min-width:0;border-width:2px}
-#btnLight{border-color:var(--red);color:var(--red)}
-#btnLight.on{background:var(--red);color:var(--paper)}
-#start{position:fixed;inset:0;z-index:10;background:var(--paper);display:flex;align-items:center;justify-content:center;
-  padding-block:24px;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
-#start .box{max-width:30em;display:flex;flex-direction:column;gap:16px}
-#start h1{font-size:34px;font-weight:400;margin:0;letter-spacing:.12em;text-wrap:balance}
-#start p{margin:0;font-size:15px;line-height:1.8}
-#start .note{font-size:12px;color:var(--muted)}
-#start ol{margin:0;padding-left:1.4em;font-size:15px;line-height:1.8}
-#toast{position:fixed;left:50%;top:22%;transform:translateX(-50%);z-index:5;background:var(--ink);color:var(--paper);
-  padding:6px 14px;font-size:15px;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
+#reticle{position:fixed;left:50%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%);border:2px solid var(--ink);border-radius:50%;
+  pointer-events:none;opacity:.5;transition:width .15s,height .15s,opacity .15s,border-color .12s}
+#reticle.aim{width:30px;height:30px;opacity:1}
+#reticle.lit{width:calc(var(--lr,140px)*2);height:calc(var(--lr,140px)*2);border-color:rgba(224,24,24,.8);opacity:1}
+#flash{position:fixed;inset:0;pointer-events:none;opacity:0;background:var(--red)}
+#dim{position:fixed;inset:0;background:rgba(0,0,0,.55);pointer-events:none;opacity:0;transition:opacity .45s}
+
+/* 上の角 */
+.corner{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));display:flex;flex-direction:column;gap:6px}
+#tl{left:max(12px,env(safe-area-inset-left,0px));align-items:flex-start}
+#tr{right:max(12px,env(safe-area-inset-right,0px));align-items:flex-end}
+.small{font-family:var(--font);font-size:14px;background:var(--paper);color:var(--ink);border:2px solid var(--ink);padding:6px 12px;cursor:pointer}
+#era{font-size:13px;background:var(--paper);border:2px solid var(--ink);padding:3px 8px}
+#menuRow{display:flex;align-items:center;gap:8px}
+#arrow{font-size:22px;animation:bob 1s ease-in-out infinite}
+@keyframes bob{50%{transform:translateX(6px)}}
+.blink3{animation:blink3 .55s steps(1) 3}
+@keyframes blink3{50%{background:var(--ink);color:var(--paper)}}
+
+/* 下の左右（親指） */
+.pad{position:fixed;bottom:0;display:flex;flex-direction:column;gap:10px;
+  padding-bottom:calc(14px + env(safe-area-inset-bottom,0px))}
+#padL{left:0;padding-left:max(14px,env(safe-area-inset-left,0px));align-items:flex-start}
+#padR{right:0;padding-right:max(14px,env(safe-area-inset-right,0px));align-items:flex-end}
+.btn{font-family:var(--font);font-size:18px;background:var(--paper);color:var(--ink);border:3px solid var(--ink);
+  width:96px;height:64px;cursor:pointer;touch-action:none;transition:opacity .8s}
+.btn.appear{animation:appear 1.2s ease-out}
+@keyframes appear{from{opacity:0}to{opacity:1}}
+.col{border-width:3px;width:82px;height:72px}
+.col.red{border-color:var(--red);color:var(--red)}
+.col.green{border-color:var(--green);color:var(--green)}
+.col.blue{border-color:var(--blue);color:var(--blue)}
+.col.red.on{background:var(--red);color:var(--paper)}
+.col.green.on{background:var(--green);color:var(--paper)}
+.col.blue.on{background:var(--blue);color:var(--paper)}
+#gb{display:flex;gap:4px}
+button:focus-visible{outline:3px solid var(--muted);outline-offset:2px}
+
+/* セリフ（Colorsと同じ、黒い枠に白い文字） */
+#dialog{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;
+  padding-bottom:calc(14px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+#dbox{width:100%;max-width:680px;background:var(--ink);color:var(--paper);border:3px solid var(--paper);outline:3px solid var(--ink);
+  padding:16px 20px 26px;font-size:20px;line-height:1.7;min-height:3.6em;position:relative;cursor:pointer}
+#dmore{position:absolute;right:14px;bottom:6px;font-size:13px}
+
+/* 黒い画面（プロローグ・暗転） */
+#black{position:fixed;inset:0;background:var(--ink);color:var(--paper);display:flex;align-items:center;justify-content:center;
+  padding-block:24px;padding-left:max(28px,env(safe-area-inset-left,0px));padding-right:max(28px,env(safe-area-inset-right,0px));
+  opacity:1;transition:opacity .6s;cursor:pointer}
+#black.clear{opacity:0;pointer-events:none}
+#btext{font-size:22px;line-height:1.8;max-width:26em;margin:0;min-height:3.6em;position:relative;z-index:1}
+#noise{position:absolute;inset:0;width:100%;height:100%}
+
+/* タイトル */
+#title{position:fixed;inset:0;background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:40px;
+  padding-block:24px;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px))}
+#title h1{margin:0;font-family:"Helvetica Neue",Arial,sans-serif;font-weight:400;font-size:clamp(56px,13vw,108px);letter-spacing:.16em;
+  color:var(--paper);-webkit-text-stroke:2px var(--ink);padding-left:.16em}
+#title .list{display:flex;flex-direction:column;gap:14px;align-items:stretch;min-width:220px}
+#title .note{font-size:12px;color:var(--muted);margin:0;text-align:center;line-height:1.7;max-width:30em}
+
+/* 全面の画面（メニュー・暗証番号・話を振り返る） */
+.sheet{position:fixed;inset:0;background:var(--dim);display:flex;align-items:center;justify-content:center;
+  padding-block:24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.panel{background:var(--ink);color:var(--paper);border:3px solid var(--paper);outline:3px solid var(--ink);padding:20px;
+  display:flex;flex-direction:column;gap:12px;min-width:260px;max-width:100%}
+.panel button{font-family:var(--font);font-size:18px;background:var(--ink);color:var(--paper);border:2px solid var(--paper);padding:10px 16px;text-align:left;cursor:pointer}
+.panel button.hint{background:var(--paper);color:var(--ink)}
+#code .panel{align-items:center;gap:18px}
+#digits{display:flex;gap:12px}
+.digit{display:flex;flex-direction:column;align-items:center;gap:6px}
+.digit .v{font-size:44px;width:64px;height:72px;border:2px solid var(--paper);display:flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+.digit button{width:64px;text-align:center;padding:6px 0;font-size:16px}
+#code .row{display:flex;gap:12px}
+#log .panel{width:min(640px,100%);max-height:80vh}
+#logList{overflow-y:auto;display:flex;flex-direction:column;gap:6px;font-size:16px;line-height:1.6;padding-right:6px}
+#logList .me{color:var(--paper)}
+#logList .gm{color:#cfcfcf}
+#logList .past{color:#8fb0ff}
+#logList .empty{color:var(--muted)}
+
+/* 操作方法：いまの画面の上に重ねる */
+#manual{position:fixed;inset:0;background:rgba(0,0,0,.78);color:var(--paper)}
+#manual svg{position:absolute;inset:0;width:100%;height:100%}
+#manual .lab{position:absolute;font-size:15px;line-height:1.5;background:var(--ink);border:2px solid var(--paper);padding:4px 10px;white-space:nowrap}
+#manual .close{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));
+  font-family:var(--font);font-size:16px;background:var(--ink);color:var(--paper);border:2px solid var(--paper);padding:8px 22px;cursor:pointer}
+body.manual .corner,body.manual .pad{z-index:20;pointer-events:none}
+body.manual #manual{z-index:15}
+#toast{position:fixed;left:50%;top:22%;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:6px 14px;font-size:15px;
+  opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
 #toast.show{opacity:1}
-@media (prefers-reduced-motion:reduce){#dim,#light,#toast{transition:none}}
+@media (prefers-reduced-motion:reduce){#arrow,.blink3,.btn.appear{animation:none}#black,#dim,#light{transition:none}}
 </style>
 
-<video id="video" playsinline muted autoplay hidden></video>
-<div id="dim"></div>
 <canvas id="gl"></canvas>
+<div id="dim"></div>
 <div id="light"></div>
 <div id="reticle"></div>
+<div id="flash"></div>
 
-<div id="hud">
-  <div class="tag" id="status">準備中</div>
-  <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
-    <div class="tag" id="count">見つけた 0 / 7</div>
-    <button class="small" id="btnFront">正面を合わせる</button>
-  </div>
+<div class="corner" id="tl"><div id="menuRow"><button class="small" id="btnMenu">メニュー</button><span id="arrow" hidden>←</span></div></div>
+<div class="corner" id="tr"><button class="small" id="btnFront">正面を合わせる</button><div id="era" hidden></div></div>
+
+<div class="pad" id="padL">
+  <button class="btn" id="btnLook" hidden disabled>調べる</button>
+  <button class="btn col red" id="btnRed" hidden>赤</button>
 </div>
+<div class="pad" id="padR">
+  <button class="btn" id="btnMode" hidden>光⇄色</button>
+  <div id="gb"><button class="btn col green" id="btnGreen" hidden>緑</button><button class="btn col blue" id="btnBlue" hidden>青</button></div>
+</div>
+<div class="pad" id="padBack" hidden style="left:50%;transform:translateX(-50%)"><button class="btn" id="btnBack">やめる</button></div>
 
-<div id="controls">
-  <button id="btnLight" aria-pressed="false">光</button>
-  <button id="btnInspect" disabled>調べる</button>
-  <button id="btnBack" hidden>やめる</button>
+<div id="dialog" hidden><div id="dbox"><span id="dtext"></span><span id="dmore">▼</span></div></div>
+
+<div class="sheet" id="menu" hidden><div class="panel">
+  <button id="mReturn">ゲームに戻る</button>
+  <button id="mSave">途中セーブして中断</button>
+  <button id="mManual">操作方法</button>
+  <button id="mLog">話を振り返る</button>
+</div></div>
+
+<div class="sheet" id="code" hidden><div class="panel">
+  <div id="digits"></div>
+  <div class="row"><button id="cOk">決定</button><button id="cCancel">やめる</button></div>
+</div></div>
+
+<div class="sheet" id="log" hidden><div class="panel">
+  <div id="logList"></div>
+  <button id="logClose">閉じる</button>
+</div></div>
+
+<div id="manual" hidden><svg id="mSvg"></svg><div id="mLabels"></div><button class="close" id="manClose">閉じる</button></div>
+
+<div id="black" class="clear"><canvas id="noise" hidden></canvas><p id="btext"></p></div>
+
+<div id="title">
+  <h1>Colors</h1>
+  <div class="list"><button class="btn" id="tNew" style="width:auto" disabled>読み込み中…</button><button class="btn" id="tCont" style="width:auto" disabled>つづきから</button></div>
+  <p class="note">その場に立ったまま、端末を持って周りを見回して遊びます。<br>パソコンでは、ドラッグか矢印キーで見回し、Eで調べる・進める、Jで赤、Escでメニュー。</p>
+  <p class="note" id="err"></p>
 </div>
 <div id="toast"></div>
 
-<div id="start">
-  <div class="box">
-    <h1>観測テスト</h1>
-    <ol>
-      <li>その場に立ったまま、端末を持って周りを見回す。</li>
-      <li>「光」を押している間、中央の円に入った言葉が見える。</li>
-      <li>浮かんでいる箱を円に入れて「調べる」。指でなぞると回る。2本指で大きさが変わる。</li>
-    </ol>
-    <p class="note">背面カメラと傾きのセンサーを使います。映像はこの端末の中だけで表示し、外へは送りません。使えない環境では、白い部屋の中を指でドラッグして見回します。<br>パソコンでは、ドラッグか矢印キーで見回し、Jキーで光、Eキーで調べる、Escでやめる。</p>
-    <div style="display:flex;gap:12px;flex-wrap:wrap">
-      <button id="btnStart" disabled>読み込み中…</button>
-      <button id="btnSkip" hidden>カメラなしで続ける</button>
-    </div>
-    <p class="note" id="err" style="color:var(--red)"></p>
-    <p class="note" id="log" style="white-space:pre-line"></p>
-    <p class="note">版：v5</p>
-  </div>
-</div>
-
 <script>
-// 途中で止まったときに、理由と進み具合を画面に出す
-window.__showErr = function (m) { var e = document.getElementById('err'); if (e) e.textContent += (e.textContent ? ' / ' : '') + m; };
-window.__log = function (m) { var e = document.getElementById('log'); if (e) e.textContent += (e.textContent ? '\n' : '') + m; };
-window.addEventListener('error', function (ev) { window.__showErr('エラー：' + (ev.message || '不明') + (ev.filename ? '（' + ev.filename.split('/').pop() + '）' : '')); });
-window.addEventListener('unhandledrejection', function (ev) { var r = ev.reason; window.__showErr('エラー：' + (r && (r.name || r.message) ? (r.name + ' ' + r.message) : String(r))); });
+window.__err = function (m) { var e = document.getElementById('err'); if (e) e.textContent += ' ' + m; };
+window.addEventListener('error', function (ev) { window.__err('エラー：' + (ev.message || '不明')); });
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 "use strict";
-(function(){
+(function () {
 const $ = id => document.getElementById(id);
-if (typeof THREE === 'undefined') { window.__showErr('3D表示の部品を読み込めませんでした。インターネット接続と、開いたアプリ（Chromeかどうか）を確認してください。'); return; }
-const glTest = document.createElement('canvas');
-if (!(glTest.getContext('webgl') || glTest.getContext('experimental-webgl'))) { window.__showErr('この開き方では3D表示（WebGL）が使えません。'); return; }
-const canvas = $('gl'), video = $('video');
+if (typeof THREE === 'undefined') { window.__err('3D表示の部品を読み込めませんでした。'); return; }
 const D2R = Math.PI / 180;
-const LIGHT_ANGLE = 0.2;     // 光が届く角度（ラジアン、約11度）
-const INSPECT_ANGLE = 0.26;  // 「調べる」ができる角度
-const DIST = 2.6;            // 言葉までの距離（m）
+const SAVE_KEY = 'colors_ar_save_v1';
+const FLOOR = -1.4, CEIL = 1.2, HGT = CEIL - FLOOR;   // 目の高さを0とする
+const AIM = 0.24, LIGHT = 0.3;                       // 調べられる角度、光の届く角度（ラジアン）
 
-/* ---------- 3D ---------- */
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+/* ================= 3D の土台 ================= */
+const renderer = new THREE.WebGLRenderer({ canvas: $('gl'), antialias: true });
 renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+renderer.setClearColor(0xffffff, 1);
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 100);
+const camera = new THREE.PerspectiveCamera(62, 1, 0.05, 100);
 scene.add(camera);
-
-// カメラが使えないときの「白い部屋」
-const room = new THREE.Group();
-const grid = new THREE.GridHelper(24, 48, 0xbdbdbd, 0xe4e4e4); grid.position.y = -1.4; room.add(grid);
-const ringGeo = new THREE.BufferGeometry().setFromPoints(
-  Array.from({ length: 129 }, (_, i) => { const a = i / 128 * Math.PI * 2; return new THREE.Vector3(Math.sin(a) * 9, 0, -Math.cos(a) * 9); }));
-const horizon = new THREE.Line(ringGeo, new THREE.LineBasicMaterial({ color: 0x9a9a9a })); room.add(horizon);
-scene.add(room);
-
-function dirFrom(az, el) {
-  const a = az * D2R, e = el * D2R;
-  return new THREE.Vector3(Math.sin(a) * Math.cos(e), Math.sin(e), -Math.cos(a) * Math.cos(e));
+const dimS = new THREE.Mesh(new THREE.SphereGeometry(1.3, 24, 16), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, side: THREE.BackSide, depthWrite: false }));
+scene.add(dimS);
+const lineMat = c => new THREE.LineBasicMaterial({ color: c });
+const faceMat = c => new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+const INK = lineMat(0x000000);
+function segs(pts, mat) {
+  const g = new THREE.BufferGeometry().setFromPoints(pts.map(p => new THREE.Vector3(p[0], p[1], p[2])));
+  return new THREE.LineSegments(g, mat || INK);
 }
-function textTexture(text, color) {
-  const c = document.createElement('canvas'); c.width = 512; c.height = 256;
-  const g = c.getContext('2d');
-  g.font = `bold ${text.length > 2 ? 120 : 150}px DotGothic16, 'Hiragino Kaku Gothic ProN', sans-serif`;
-  g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.shadowColor = color; g.shadowBlur = 18; g.fillStyle = color; g.fillText(text, 256, 132);
-  g.shadowBlur = 0; g.fillText(text, 256, 132);
-  const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
-}
+function loop(pts) { const o = []; for (let i = 0; i < pts.length; i++) o.push(pts[i], pts[(i + 1) % pts.length]); return o; }
+const rect2 = (x0, y0, x1, y1) => loop([[x0, y0, 0], [x1, y0, 0], [x1, y1, 0], [x0, y1, 0]]);
 
-const WORDS = [['見る', 0, 6], ['光', 72, 18], ['足もと', 118, -42], ['過去', 158, -4], ['声', 224, 12], ['空', 296, 46]];
-const words = [];
-const boxItem = { found: false };
-let foundCount = 0;
-
-function buildWorld() {
-  for (const [t, az, el] of WORDS) {
-    const dir = dirFrom(az, el);
-    const mat = new THREE.MeshBasicMaterial({ map: textTexture(t, '#e01818'), transparent: true, opacity: 0, depthWrite: false });
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.55), mat);
-    m.position.copy(dir).multiplyScalar(DIST); m.lookAt(0, 0, 0);
-    scene.add(m);
-    words.push({ text: t, dir, mesh: m, found: false, op: 0 });
+// 壁：幅 w・高さ HGT の面から、穴（窓・隙間）をくりぬく。ローカル座標は x が左右、y が床からの高さ、面は +z を向く
+function wall(w, holes, mat, edgeMat) {
+  const g = new THREE.Group();
+  const xs = [-w / 2, w / 2];
+  for (const h of holes) xs.push(h.x - h.w / 2, h.x + h.w / 2);
+  xs.sort((a, b) => a - b);
+  const add = (x0, x1, y0, y1) => { if (x1 - x0 < 1e-4 || y1 - y0 < 1e-4) return; const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, y1 - y0), mat); m.position.set((x0 + x1) / 2, (y0 + y1) / 2, 0); g.add(m); };
+  for (let i = 0; i < xs.length - 1; i++) {
+    const x0 = xs[i], x1 = xs[i + 1], mid = (x0 + x1) / 2;
+    const cov = holes.filter(h => Math.abs(mid - h.x) < h.w / 2).sort((a, b) => a.y - b.y);
+    let y = 0;
+    for (const h of cov) { add(x0, x1, y, h.y - h.h / 2); y = h.y + h.h / 2; }
+    add(x0, x1, y, HGT);
   }
-  // 箱：白い面と黒い線。底の面にだけ、光で見える言葉がある
-  const box = new THREE.Group();
-  const geo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-  box.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })));
-  box.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0x111111 })));
-  const xg = new THREE.BufferGeometry().setFromPoints([   // 前の面に×印（Colorsの箱）
-    new THREE.Vector3(-0.22, -0.22, 0.252), new THREE.Vector3(0.22, 0.22, 0.252),
-    new THREE.Vector3(0.22, -0.22, 0.252), new THREE.Vector3(-0.22, 0.22, 0.252)]);
-  box.add(new THREE.LineSegments(xg, new THREE.LineBasicMaterial({ color: 0x111111 })));
-  const hidden = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.23),
-    new THREE.MeshBasicMaterial({ map: textTexture('うら', '#e01818'), transparent: true, opacity: 0, depthWrite: false }));
-  hidden.rotation.x = Math.PI / 2; hidden.position.y = -0.256;   // 底の面（下向き）
-  box.add(hidden);
-  const bdir = dirFrom(38, -12);
-  box.position.copy(bdir).multiplyScalar(DIST * 0.85);
-  box.lookAt(0, box.position.y, 0);
-  scene.add(box);
-  Object.assign(boxItem, { obj: box, hidden, dir: bdir, home: box.position.clone(), homeQ: box.quaternion.clone() });
+  const e = [];
+  for (const h of holes) e.push(...rect2(h.x - h.w / 2, h.y - h.h / 2, h.x + h.w / 2, h.y + h.h / 2));
+  if (e.length) { const l = segs(e, edgeMat || INK); l.position.z = 0.003; g.add(l); }
+  return g;
+}
+// 部屋の箱：幅 2W（左右）× 奥行き 2D（前後）。各壁を置く関数を返す
+function roomShell(W, D, opt) {
+  const grp = new THREE.Group();
+  const wm = faceMat(opt.wall), em = lineMat(opt.edge);
+  const place = (side, holes) => {
+    const len = (side === 'front' || side === 'back') ? W * 2 : D * 2;
+    const g = wall(len, holes || [], wm, em);
+    if (side === 'front') { g.position.set(0, FLOOR, -D); }
+    if (side === 'back') { g.position.set(0, FLOOR, D); g.rotation.y = Math.PI; }
+    if (side === 'right') { g.position.set(W, FLOOR, 0); g.rotation.y = -Math.PI / 2; }
+    if (side === 'left') { g.position.set(-W, FLOOR, 0); g.rotation.y = Math.PI / 2; }
+    grp.add(g); return g;
+  };
+  const floorM = new THREE.Mesh(new THREE.PlaneGeometry(W * 2, D * 2), faceMat(opt.floor)); floorM.rotation.x = -Math.PI / 2; floorM.position.y = FLOOR; grp.add(floorM);
+  const ceilM = new THREE.Mesh(new THREE.PlaneGeometry(W * 2, D * 2), faceMat(opt.wall)); ceilM.rotation.x = Math.PI / 2; ceilM.position.y = CEIL; grp.add(ceilM);
+  // 部屋の角の線
+  const c = [[-W, -D], [W, -D], [W, D], [-W, D]], e = [];
+  for (let i = 0; i < 4; i++) {
+    const [x0, z0] = c[i], [x1, z1] = c[(i + 1) % 4];
+    e.push([x0, FLOOR, z0], [x1, FLOOR, z1], [x0, CEIL, z0], [x1, CEIL, z1], [x0, FLOOR, z0], [x0, CEIL, z0]);
+  }
+  grp.add(segs(e, em));
+  // 床のマス目
+  const gr = [], step = opt.grid || 0.5;
+  for (let x = -W + step; x < W - 1e-6; x += step) gr.push([x, FLOOR + 0.002, -D], [x, FLOOR + 0.002, D]);
+  for (let z = -D + step; z < D - 1e-6; z += step) gr.push([-W, FLOOR + 0.002, z], [W, FLOOR + 0.002, z]);
+  grp.add(segs(gr, lineMat(opt.gridColor)));
+  return { grp, place };
 }
 
-/* ---------- 向き ---------- */
-let mode = 'drag';          // 'gyro' | 'drag'
-let ori = null, gotGyro = false, yawOffset = 0, needCalib = true;
-let dragYaw = 0, dragPitch = 0;
+// 窓や隙間から見える町（白黒の線画）
+let townTex = null;
+function townTexture() {
+  if (townTex) return townTex;
+  const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 512;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, 1024, 512);
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let x = -20; x < 1040;) { const w = 50 + rnd() * 70, h = 120 + rnd() * 200; g.strokeStyle = '#9a9a9a'; g.lineWidth = 2; g.strokeRect(x, 470 - h, w, h); x += w + 6; }
+  for (let x = -10; x < 1040;) {
+    const w = 80 + rnd() * 110, h = 90 + rnd() * 170;
+    g.fillStyle = '#fff'; g.fillRect(x, 500 - h, w, h); g.strokeStyle = '#000'; g.lineWidth = 3; g.strokeRect(x, 500 - h, w, h);
+    g.lineWidth = 2; for (let yy = 500 - h + 16; yy < 470; yy += 30) for (let xx = x + 12; xx < x + w - 22; xx += 26) g.strokeRect(xx, yy, 12, 14);
+    x += w + 14 + rnd() * 30;
+  }
+  g.lineWidth = 3; g.beginPath(); g.moveTo(170, 512); g.lineTo(170, 230); g.moveTo(820, 512); g.lineTo(820, 210); g.stroke();
+  g.lineWidth = 1.5; g.beginPath(); g.moveTo(0, 260); g.quadraticCurveTo(170, 300, 170, 240); g.quadraticCurveTo(495, 300, 820, 220); g.quadraticCurveTo(930, 260, 1024, 250); g.stroke();
+  townTex = new THREE.CanvasTexture(cv); townTex.anisotropy = 4; return townTex;
+}
+function townBehind(grp, x, y, z, w, h) {   // 壁の向こう（-z 側）に町と空を置く
+  const t = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: townTexture() })); t.position.set(x, y, z); grp.add(t);
+  const s = new THREE.Mesh(new THREE.PlaneGeometry(w * 4, h * 5), new THREE.MeshBasicMaterial({ color: 0xffffff })); s.position.set(x, y, z - 0.1); grp.add(s);
+}
+// 文字を書いた板（赤い光で見える文字など）。常にプレイヤーの方を向く
+function textPlane(text, color, wid) {
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 192;
+  const g = cv.getContext('2d');
+  g.font = `110px DotGothic16, 'Hiragino Kaku Gothic ProN', sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  let fs = 110; while (g.measureText(text).width > 490 && fs > 40) { fs -= 6; g.font = `${fs}px DotGothic16, sans-serif`; }
+  g.fillStyle = color; g.fillText(text, 256, 100);
+  const t = new THREE.CanvasTexture(cv);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(wid, wid * 192 / 512), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, depthTest: false }));
+  m.renderOrder = 10; return m;
+}
+// 扉（線画）。開くと奥が黒くなる
+function makeDoor(color, fill) {
+  const g = new THREE.Group(), w = 1.0, h = 2.0;
+  const panel = new THREE.Mesh(new THREE.PlaneGeometry(w - 0.04, h - 0.04), faceMat(fill)); panel.position.set(0, h / 2, 0.004); g.add(panel);
+  const dark = new THREE.Mesh(new THREE.PlaneGeometry(w - 0.04, h - 0.04), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthWrite: false }));
+  dark.position.set(0, h / 2, 0.008); g.add(dark);
+  const e = [...rect2(-w / 2, 0, w / 2, h), ...rect2(-w / 2 + 0.07, 0.05, w / 2 - 0.07, h - 0.07),
+    [w / 2 - 0.2, 0.95, 0], [w / 2 - 0.13, 0.95, 0], [w / 2 - 0.13, 0.95, 0], [w / 2 - 0.13, 1.02, 0]];
+  const l = segs(e, lineMat(color)); l.position.z = 0.01; g.add(l);
+  return { g, dark, lines: l, panel };
+}
+
+/* ================= 部屋の定義 ================= */
+// 2D版の画面の上＝正面（-z）、右＝右（+x）、下＝背後（+z）、左＝左（-x）。プレイヤーは常に真ん中
+let room = null;     // いまの部屋 { id, grp, targets, tick }
+const G = { flags: newFlags(), log: [] };
+function newFlags() { return { red: false, seen: {}, ev: {} }; }
+
+const ROOMS = {
+  // ---- ステージ1-1：窓だけがある白い部屋。窓を調べると揺れて右の壁に扉 ----
+  s1: () => {
+    const W = 2.5, D = 2.5, F = G.flags;
+    const sh = roomShell(W, D, { wall: 0xffffff, floor: 0xffffff, edge: 0x000000, gridColor: 0xd4d4d4 });
+    const win = { x: 0, y: 1.55, w: 1.5, h: 0.95 };
+    sh.place('front', [win]); sh.place('back'); sh.place('left'); sh.place('right');
+    // 窓の枠と桟、窓台
+    const wy = FLOOR + win.y, hw = win.w / 2, hh = win.h / 2, z = -D + 0.004;
+    const fr = [...loop([[-hw - 0.06, wy - hh - 0.06, z], [hw + 0.06, wy - hh - 0.06, z], [hw + 0.06, wy + hh + 0.06, z], [-hw - 0.06, wy + hh + 0.06, z]]),
+      [0, wy - hh, z], [0, wy + hh, z], [-hw, wy, z], [hw, wy, z], [-hw - 0.1, wy - hh - 0.1, z + 0.08], [hw + 0.1, wy - hh - 0.1, z + 0.08]];
+    sh.grp.add(segs(fr));
+    townBehind(sh.grp, 0, 0.2, -D - 3.2, 9, 4.5);
+    // 右の壁の扉。窓を調べたあと、線が下から順に描かれていく
+    const door = makeDoor(0x000000, 0xffffff);
+    door.g.position.set(W - 0.004, FLOOR, 0); door.g.rotation.y = -Math.PI / 2; sh.grp.add(door.g);
+    door.g.visible = !!F.ev.s1_open;
+    const drawn = { v: F.ev.s1_open ? 1 : 0 };
+    const targets = {
+      window: { pos: new THREE.Vector3(0, wy, -D), act: () => true,
+        examine() {
+          say('私のいた町だ。どうにかして脱出したい。', () => {
+            if (F.ev.s1_open) return;
+            F.ev.s1_open = true; quake(1.2); rumble(1.4);
+            setTimeout(() => { door.g.visible = true; drawn.v = 0.0001; }, 500);
+          }, !F.ev.s1_open);
+        } },
+      door: { pos: new THREE.Vector3(W, FLOOR + 1.0, 0), act: () => F.ev.s1_open && drawn.v >= 1,
+        examine() { openDoorAnim(door, () => goRoom('c1')); } }
+    };
+    const tick = dt => {   // 扉の線を少しずつ描く（パネルは最後に）
+      if (drawn.v > 0 && drawn.v < 1) drawn.v = Math.min(1, drawn.v + dt / 1.6);
+      const n = door.lines.geometry.attributes.position.count;
+      door.lines.geometry.setDrawRange(0, drawn.v >= 1 ? n : Math.floor(drawn.v * n / 2) * 2);
+      door.panel.visible = drawn.v >= 1;
+    };
+    return { grp: sh.grp, targets, tick };
+  },
+
+  // ---- 通路1：グレーの横長の部屋。正面に端末、その左に隙間。右の壁に扉、扉の近くの床に箱 ----
+  c1: () => {
+    const W = 3.0, D = 1.5, F = G.flags;
+    const sh = roomShell(W, D, { wall: 0xc4c4c4, floor: 0xb0b0b0, edge: 0x3a3a3a, gridColor: 0x9a9a9a, grid: 1.0 });
+    const crack = { x: -1.3, y: 1.55, w: 0.09, h: 1.3 };
+    const fw = sh.place('front', [crack]); sh.place('back'); sh.place('left'); sh.place('right');
+    townBehind(sh.grp, -1.3, 0.2, -D - 2.2, 6, 3);
+    // 壁の継ぎ目（コンクリートの板）とボルト
+    const seam = [], ml = lineMat(0x8a8a8a);
+    for (const x of [-2, -1, 0, 1, 2]) { if (Math.abs(x - crack.x) > 0.2) seam.push([x, FLOOR, -D + 0.003], [x, CEIL, -D + 0.003]); seam.push([x, FLOOR, D - 0.003], [x, CEIL, D - 0.003]); }
+    for (const z of [-0.75, 0.75]) { seam.push([-W + 0.003, FLOOR, z], [-W + 0.003, CEIL, z], [W - 0.003, FLOOR, z], [W - 0.003, CEIL, z]); }
+    for (const y of [FLOOR + 0.9, FLOOR + 1.8]) { seam.push([-W, y, -D + 0.003], [W, y, -D + 0.003], [-W, y, D - 0.003], [W, y, D - 0.003]); }
+    sh.grp.add(segs(seam, ml));
+    // 端末（正面の壁の真ん中）
+    const term = new THREE.Group();
+    const tb = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.75, 0.14), new THREE.MeshBasicMaterial({ color: 0xe6e6e6 }));
+    term.add(tb); term.add(new THREE.LineSegments(new THREE.EdgesGeometry(tb.geometry), INK));
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.22), new THREE.MeshBasicMaterial({ color: F.red ? 0xe02020 : 0x2a2a2a }));
+    scr.position.set(0, 0.16, 0.071); term.add(scr);
+    term.add(segs([...loop([[-0.18, -0.06, 0.072], [0.18, -0.06, 0.072], [0.18, -0.3, 0.072], [-0.18, -0.3, 0.072]]),
+      [-0.06, -0.06, 0.072], [-0.06, -0.3, 0.072], [0.06, -0.06, 0.072], [0.06, -0.3, 0.072], [-0.18, -0.18, 0.072], [0.18, -0.18, 0.072]]));
+    term.position.set(0, -0.25, -D + 0.07); sh.grp.add(term);
+    // 入口（左の壁）：閉じた扉
+    const ent = makeDoor(0x3a3a3a, 0xb8b8b8); ent.g.position.set(-W + 0.004, FLOOR, 0); ent.g.rotation.y = Math.PI / 2; sh.grp.add(ent.g);
+    // 出口（右の壁）：鉄の扉
+    const door = makeDoor(0x222222, 0x9c9c9c);
+    door.g.position.set(W - 0.004, FLOOR, 0); door.g.rotation.y = -Math.PI / 2; sh.grp.add(door.g);
+    const ribs = []; for (const y of [0.5, 1.0, 1.5]) ribs.push([-0.43, y, 0.012], [0.43, y, 0.012]);
+    const ribL = segs(ribs, lineMat(0x555555)); door.g.add(ribL);
+    if (F.ev.c1_door_open) { door.dark.material.opacity = 1; ribL.visible = false; }
+    // 箱（扉の近くの床）。赤い光で「あく」が見える。調べると手前に来て、ふたが開き、中に「0」と書かれた紙
+    const box = makeCrate(0.42);
+    const boxHome = new THREE.Vector3(2.3, FLOOR + 0.21, 0.75);
+    box.g.position.copy(boxHome); box.g.lookAt(0, boxHome.y, 0); sh.grp.add(box.g);
+    if (F.ev.c1_box_open) box.lid.rotation.x = -1.9;
+    const boxLabel = textPlane('「あく」', '#e01818', 0.55); boxLabel.position.copy(boxHome).add(new THREE.Vector3(0, 0.42, 0)); sh.grp.add(boxLabel);
+    const targets = {
+      crack: { pos: new THREE.Vector3(crack.x, FLOOR + crack.y, -D), act: () => true,
+        examine() { say(['隙間から私のいた町が見える。', 'ただ、体が通らないし、奥には透明な壁があるようにみえる']); } },
+      term: { pos: new THREE.Vector3(0, -0.25, -D), act: () => true,
+        examine() {
+          if (!F.red) {
+            F.red = true; scr.material.color.set(0xe02020); softFlash();
+            showButton('btnRed');
+            say('何かが変わった気がする', () => startHint(false), true);
+          } else say('端末は静かに光っている。');
+        } },
+      box: { pos: boxHome.clone(), act: () => true, hidden: 'c1_box', label: boxLabel,
+        examine() {
+          if (!F.seen.c1_box) { say('箱だ。'); return; }
+          inspect(box, boxHome, () => { if (!F.ev.c1_box_open) { F.ev.c1_box_open = true; box.opening = 0; } });
+        } },
+      door: { pos: new THREE.Vector3(W, FLOOR + 1.0, 0), act: () => true,
+        examine() {
+          if (F.ev.c1_door_open) { goRoom('s2'); return; }
+          openCode('1', v => {
+            if (v !== '0') { say('……扉は動かない。'); return; }
+            F.ev.c1_door_open = true; ribL.visible = false; quake(0.5); rumble(0.9);
+            fadeDark(door.dark, 0.9);
+            say(['扉が開いた。赤い光を当てると文字や数字が見えるみたいだ。', 'しかも、書かれた言葉の通りになるのか。'], null, true);
+          });
+        } }
+    };
+    const tick = dt => {
+      if (box.opening != null) { box.opening = Math.min(1, box.opening + dt / 0.7); box.lid.rotation.x = -1.9 * ease(box.opening); if (box.opening >= 1) box.opening = null; }
+    };
+    return { grp: sh.grp, targets, tick };
+  },
+
+  // ---- ステージ1-2：まだ作っていない ----
+  s2: null
+};
+
+// 箱（Colorsの木箱：縁と×印）。ふたは奥の辺を軸に開く。中に紙
+function makeCrate(s) {
+  const g = new THREE.Group(), h = s / 2, m = faceMat(0xffffff);
+  const face = (w, hh, x, y, z, rx, ry) => { const p = new THREE.Mesh(new THREE.PlaneGeometry(w, hh), m); p.position.set(x, y, z); p.rotation.set(rx || 0, ry || 0, 0); g.add(p); };
+  face(s, s, 0, -h, 0, -Math.PI / 2); face(s, s, 0, 0, h); face(s, s, 0, 0, -h); face(s, s, h, 0, 0, 0, Math.PI / 2); face(s, s, -h, 0, 0, 0, Math.PI / 2);
+  const e = [];
+  const cube = [[-h, -h, -h], [h, -h, -h], [h, -h, h], [-h, -h, h]];
+  for (let i = 0; i < 4; i++) { const a = cube[i], b = cube[(i + 1) % 4]; e.push(a, b, [a[0], h, a[2]], [b[0], h, b[2]], a, [a[0], h, a[2]]); }
+  const k = h - 0.04, o = 0.002;
+  e.push([-k, -k, h + o], [k, k, h + o], [k, -k, h + o], [-k, k, h + o]);            // 前の×
+  e.push([-k, -k, -h - o], [k, k, -h - o], [k, -k, -h - o], [-k, k, -h - o]);        // 後ろの×
+  e.push([h + o, -k, -k], [h + o, k, k], [h + o, -k, k], [h + o, k, -k]);            // 右の×
+  e.push([-h - o, -k, -k], [-h - o, k, k], [-h - o, -k, k], [-h - o, k, -k]);        // 左の×
+  g.add(segs(e));
+  // 紙（底に置かれている）
+  const pc = document.createElement('canvas'); pc.width = 256; pc.height = 256;
+  const pg = pc.getContext('2d'); pg.fillStyle = '#fff'; pg.fillRect(0, 0, 256, 256); pg.strokeStyle = '#000'; pg.lineWidth = 4; pg.strokeRect(10, 10, 236, 236);
+  pg.fillStyle = '#000'; pg.font = '150px DotGothic16, sans-serif'; pg.textAlign = 'center'; pg.textBaseline = 'middle'; pg.fillText('0', 128, 138);
+  const paper = new THREE.Mesh(new THREE.PlaneGeometry(s * 0.7, s * 0.7), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(pc) }));
+  paper.rotation.x = -Math.PI / 2; paper.rotation.z = 0.15; paper.position.set(0, -h + 0.006, 0); g.add(paper);
+  // ふた
+  const lid = new THREE.Group(); lid.position.set(0, h, -h); g.add(lid);
+  const lp = new THREE.Mesh(new THREE.PlaneGeometry(s, s), m); lp.rotation.x = -Math.PI / 2; lp.position.set(0, 0, h); lid.add(lp);
+  lid.add(segs([...loop([[-h, o, 0], [h, o, 0], [h, o, s], [-h, o, s]]), [-k, o, h - k], [k, o, h + k], [k, o, h - k], [-k, o, h + k]]));
+  return { g, lid, opening: null };
+}
+
+/* ================= 向き（ジャイロ／ドラッグ） ================= */
+let mode = 'drag', ori = null, gotGyro = false, yawOffset = 0, needCalib = true, dragYaw = 0, dragPitch = 0;
 const euler = new THREE.Euler(), zee = new THREE.Vector3(0, 0, 1), yee = new THREE.Vector3(0, 1, 0);
 const q0 = new THREE.Quaternion(), q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)), qY = new THREE.Quaternion();
-const fwd = new THREE.Vector3();
-
-window.addEventListener('deviceorientation', e => {
-  if (e.alpha == null && e.beta == null) return;
-  ori = { a: e.alpha || 0, b: e.beta || 0, g: e.gamma || 0 }; gotGyro = true;
-});
-function screenAngle() {
-  return (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (window.orientation || 0);
-}
-function gyroQuat(out, withOffset) {
+window.addEventListener('deviceorientation', e => { if (e.alpha == null && e.beta == null) return; ori = { a: e.alpha || 0, b: e.beta || 0, g: e.gamma || 0 }; gotGyro = true; });
+const screenAngle = () => (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (window.orientation || 0);
+function gyroQuat(out, off) {
   euler.set(ori.b * D2R, ori.a * D2R, -ori.g * D2R, 'YXZ');
   out.setFromEuler(euler); out.multiply(q1); out.multiply(q0.setFromAxisAngle(zee, -screenAngle() * D2R));
-  if (withOffset) out.premultiply(qY.setFromAxisAngle(yee, yawOffset));
+  if (off) out.premultiply(qY.setFromAxisAngle(yee, yawOffset));
   return out;
 }
-function calibrate() {
-  if (mode === 'gyro' && ori) {
-    const q = gyroQuat(new THREE.Quaternion(), false);
-    const f = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
-    yawOffset = Math.atan2(f.x, -f.z);
-  } else { dragYaw = 0; dragPitch = 0; }
-  toast('正面を合わせた');
+function calibrate() {   // いま向いている方向を「正面」にする
+  if (mode === 'gyro' && ori) { const f = new THREE.Vector3(0, 0, -1).applyQuaternion(gyroQuat(new THREE.Quaternion(), false)); yawOffset = Math.atan2(f.x, -f.z); }
+  else { dragYaw = 0; dragPitch = 0; }
 }
-
-/* ---------- 入力 ---------- */
-let lightOn = false;
-function setLight(v) {
-  lightOn = v; $('btnLight').classList.toggle('on', v); $('btnLight').setAttribute('aria-pressed', String(v));
-  $('light').classList.toggle('on', v); $('reticle').classList.toggle('on', v);
-}
-const bl = $('btnLight');
-bl.addEventListener('pointerdown', e => { e.preventDefault(); bl.setPointerCapture(e.pointerId); setLight(true); });
-['pointerup', 'pointercancel', 'lostpointercapture'].forEach(n => bl.addEventListener(n, () => setLight(false)));
-document.addEventListener('contextmenu', e => e.preventDefault());
-
-const pointers = new Map(); let pinch0 = 0, scale0 = 1;
-canvas.addEventListener('pointerdown', e => { canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-  if (pointers.size === 2) { const p = [...pointers.values()]; pinch0 = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y); scale0 = boxItem.obj.scale.x; } });
-canvas.addEventListener('pointermove', e => {
-  const prev = pointers.get(e.pointerId); if (!prev) return;
-  const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
-  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-  if (state === 'inspect') {
-    if (pointers.size >= 2) {
-      const p = [...pointers.values()]; const d = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
-      if (pinch0 > 0) boxItem.obj.scale.setScalar(Math.max(0.6, Math.min(2.2, scale0 * d / pinch0)));
-    } else rotateBox(dx, dy);
-  } else if (mode === 'drag' && state === 'look' && pointers.size === 1) {
-    dragYaw -= dx * 0.005; dragPitch = Math.max(-1.4, Math.min(1.4, dragPitch - dy * 0.005));
+$('btnFront').addEventListener('click', calibrate);
+const cv = $('gl'), ptrs = new Map();
+let pinch0 = 0, scale0 = 1;
+cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+  if (ptrs.size === 2 && insp) { const p = [...ptrs.values()]; pinch0 = Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]); scale0 = insp.obj.g.scale.x; } });
+cv.addEventListener('pointermove', e => {
+  const p = ptrs.get(e.pointerId); if (!p) return;
+  const dx = e.clientX - p[0], dy = e.clientY - p[1]; ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+  if (insp && insp.state === 'hold') {
+    if (ptrs.size >= 2) { const q = [...ptrs.values()]; const d = Math.hypot(q[0][0] - q[1][0], q[0][1] - q[1][1]); if (pinch0 > 0) insp.obj.g.scale.setScalar(Math.max(0.6, Math.min(2.2, scale0 * d / pinch0))); }
+    else rotateHeld(dx, dy);
+    return;
   }
+  if ((mode !== 'gyro') && ptrs.size === 1 && !insp) { dragYaw += dx * 0.005; dragPitch = Math.max(-1.3, Math.min(1.3, dragPitch + dy * 0.005)); }
 });
-['pointerup', 'pointercancel'].forEach(n => canvas.addEventListener(n, e => { pointers.delete(e.pointerId); pinch0 = 0; }));
+['pointerup', 'pointercancel'].forEach(n => cv.addEventListener(n, e => { ptrs.delete(e.pointerId); pinch0 = 0; }));
 
+/* ================= 音 ================= */
+let ac = null;
+function audio() { if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (ac && ac.state === 'suspended') ac.resume(); return ac; }
+function rumble(dur, loud) {   // Colorsの導入と同じ系統の、低いノイズ
+  const a = audio(); if (!a) return;
+  const t = a.currentTime, buf = a.createBuffer(1, Math.floor(a.sampleRate * dur), a.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  const src = a.createBufferSource(); src.buffer = buf;
+  const ws = a.createWaveShaper(), curve = new Float32Array(256); for (let i = 0; i < 256; i++) curve[i] = Math.tanh((i / 128 - 1) * 6); ws.curve = curve;
+  const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(loud ? 3000 : 700, t); lp.frequency.exponentialRampToValueAtTime(70, t + dur);
+  const osc = a.createOscillator(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(52, t); osc.frequency.exponentialRampToValueAtTime(26, t + dur);
+  const g = a.createGain(); g.gain.setValueAtTime(loud ? 0.45 : 0.32, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(ws); osc.connect(ws); ws.connect(lp); lp.connect(g); g.connect(a.destination); src.start(t); osc.start(t); osc.stop(t + dur);
+}
+
+/* ================= セリフと記録 ================= */
+let dlg = null;
+function say(lines, cb, log) {
+  lines = [].concat(lines);
+  if (log) for (const t of lines) G.log.push({ t, who: 'me' });
+  dlg = { lines, i: 0, c: 0, cb }; refreshUI();
+}
+function dialogAdvance() {
+  const l = dlg.lines[dlg.i];
+  if (dlg.c < l.length) { dlg.c = l.length; return; }
+  dlg.i++; dlg.c = 0;
+  if (dlg.i >= dlg.lines.length) { const cb = dlg.cb; dlg = null; refreshUI(); if (cb) cb(); }
+}
+$('dbox').addEventListener('click', () => { if (dlg) dialogAdvance(); });
+
+/* ================= 画面の部品の出し入れ ================= */
+const unlocked = { btnLook: false, btnRed: false };
+function showButton(id) { unlocked[id] = true; const b = $(id); b.classList.remove('appear'); void b.offsetWidth; b.classList.add('appear'); refreshUI(); }
+let codeOpen = false, menuOpen = false, manualOpen = false, logOpen = false, playing = false, busy = false;
+function refreshUI() {
+  const blocking = !!dlg || codeOpen || menuOpen || manualOpen || logOpen || !playing || busy;
+  $('dialog').hidden = !dlg;
+  const showPads = playing && !dlg && !codeOpen && !insp && !busy;
+  $('padL').hidden = !showPads; $('padR').hidden = !showPads;
+  $('btnLook').hidden = !unlocked.btnLook; $('btnRed').hidden = !unlocked.btnRed;
+  $('padBack').hidden = !(insp && insp.state === 'hold') || !!dlg;
+  $('tl').hidden = $('tr').hidden = !playing;
+  $('reticle').hidden = !playing || !!insp;
+  if (blocking) setLight(false);
+}
+
+/* ================= 赤い光 ================= */
+let lightOn = false;
+function setLight(v) { lightOn = v; $('btnRed').classList.toggle('on', v); $('light').classList.toggle('on', v); }
+const br = $('btnRed');
+br.addEventListener('pointerdown', e => { e.preventDefault(); br.setPointerCapture(e.pointerId); if (!dlg && !insp) setLight(true); });
+['pointerup', 'pointercancel', 'lostpointercapture'].forEach(n => br.addEventListener(n, () => setLight(false)));
+document.addEventListener('contextmenu', e => e.preventDefault());
+let flashA = 0;
+function softFlash() { flashA = 0.35; }
+
+/* ================= 操作の案内（メニューの点滅と矢印） ================= */
+let hint = null;   // { required }
+function startHint(required) {
+  hint = { required };
+  const b = $('btnMenu'); b.classList.remove('blink3'); void b.offsetWidth; b.classList.add('blink3');
+  $('arrow').hidden = !required;
+  if (!required) setTimeout(() => { if (hint && !hint.required) hint = null; }, 4400);
+}
+
+/* ================= メニュー ================= */
+function openMenu() {
+  if (!playing || codeOpen || insp || busy) return;
+  menuOpen = true; $('menu').hidden = false;
+  $('mManual').classList.toggle('hint', !!hint);
+  refreshUI();
+}
+function closeMenu() { menuOpen = false; $('menu').hidden = true; refreshUI(); }
+$('btnMenu').addEventListener('click', openMenu);
+$('mReturn').addEventListener('click', closeMenu);
+$('mSave').addEventListener('click', () => {
+  let ok = false;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ scr: room.id, flags: G.flags, log: G.log })); ok = true; } catch (e) {}
+  closeMenu(); toTitle(ok ? 'セーブしました' : 'セーブできませんでした');
+});
+$('mManual').addEventListener('click', () => { $('menu').hidden = true; openManual(); });
+$('mLog').addEventListener('click', () => {
+  $('menu').hidden = true; logOpen = true; $('log').hidden = false;
+  const L = $('logList'); L.textContent = '';
+  if (!G.log.length) { const p = document.createElement('div'); p.className = 'empty'; p.textContent = 'まだ何もない。'; L.appendChild(p); }
+  for (const r of G.log) { const p = document.createElement('div'); p.className = r.who; p.textContent = r.t; L.appendChild(p); }
+  L.scrollTop = L.scrollHeight;
+});
+$('logClose').addEventListener('click', () => { logOpen = false; $('log').hidden = true; $('menu').hidden = false; });
+
+/* ---- 操作方法：いまの画面の上に、ボタンごとの説明を重ねる ---- */
+function openManual() {
+  manualOpen = true;
+  if (!G.flags.ev.ctrlSeen) { G.flags.ev.ctrlSeen = true; unlocked.btnLook = true; }   // 一度見たら、調べられるようになる
+  hint = null; $('arrow').hidden = true;
+  refreshUI(); $('padL').hidden = false; $('padR').hidden = false;
+  document.body.classList.add('manual'); $('manual').hidden = false;
+  const items = [
+    { el: $('btnMenu'), text: 'メニュー', side: 'r' },
+    { el: $('btnFront'), text: 'いま向いている方を、正面にする', side: 'l' },
+    { el: $('reticle'), text: '見回す：端末を向けた方が見える', side: 'c' },
+    { el: $('btnLook'), text: '調べる：中央の丸を合わせて押す', side: 'r' }
+  ];
+  if (G.flags.red) items.push({ el: $('btnRed'), text: '赤：押している間、赤い光が出る', side: 'r' });
+  const svg = $('mSvg'), labs = $('mLabels'); svg.innerHTML = ''; labs.innerHTML = '';
+  const W = innerWidth, H = innerHeight;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  for (const it of items) {
+    if (it.el.hidden) continue;
+    const r = it.el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const lab = document.createElement('div'); lab.className = 'lab'; lab.textContent = it.text; labs.appendChild(lab);
+    const lw = lab.offsetWidth, lh = lab.offsetHeight;
+    let lx, ly, ax, ay;
+    if (it.side === 'r') { lx = Math.min(W - lw - 12, r.right + 40); ly = cy - lh / 2 - (cy > H / 2 ? 30 : -30); ax = r.right; ay = cy; }
+    else if (it.side === 'l') { lx = Math.max(12, r.left - lw - 40); ly = cy - lh / 2 + 40; ax = r.left; ay = cy; }
+    else { lx = cx - lw / 2; ly = cy - 70 - lh; ax = cx; ay = r.top; }
+    ly = Math.max(12, Math.min(H - lh - 70, ly));
+    lab.style.left = lx + 'px'; lab.style.top = ly + 'px';
+    const tx = it.side === 'r' ? lx : (it.side === 'l' ? lx + lw : lx + lw / 2), ty = it.side === 'c' ? ly + lh : ly + lh / 2;
+    const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    ln.setAttribute('x1', ax); ln.setAttribute('y1', ay); ln.setAttribute('x2', tx); ln.setAttribute('y2', ty);
+    ln.setAttribute('stroke', '#fff'); ln.setAttribute('stroke-width', '2'); svg.appendChild(ln);
+  }
+}
+$('manClose').addEventListener('click', () => {
+  manualOpen = false; $('manual').hidden = true; document.body.classList.remove('manual');
+  $('menu').hidden = false; refreshUI();
+});
+
+/* ================= 暗証番号 ================= */
+let codeCb = null, codeVal = [];
+function openCode(start, cb) {
+  codeOpen = true; codeCb = cb; codeVal = start.split('').map(Number); renderCode();
+  $('code').hidden = false; refreshUI();
+}
+function renderCode() {
+  const box = $('digits'); box.textContent = '';
+  codeVal.forEach((v, i) => {
+    const d = document.createElement('div'); d.className = 'digit';
+    const up = document.createElement('button'); up.textContent = '▲'; up.onclick = () => { codeVal[i] = (codeVal[i] + 1) % 10; renderCode(); };
+    const val = document.createElement('div'); val.className = 'v'; val.textContent = v;
+    const dn = document.createElement('button'); dn.textContent = '▼'; dn.onclick = () => { codeVal[i] = (codeVal[i] + 9) % 10; renderCode(); };
+    d.append(up, val, dn); box.appendChild(d);
+  });
+}
+function closeCode(submit) {
+  codeOpen = false; $('code').hidden = true; refreshUI();
+  const cb = codeCb; codeCb = null;
+  if (submit && cb) cb(codeVal.join(''));
+}
+$('cOk').addEventListener('click', () => closeCode(true));
+$('cCancel').addEventListener('click', () => closeCode(false));
+
+/* ================= 調べる：手元に引き寄せて回す ================= */
+let insp = null;   // { obj, home, homeQ, state:'in'|'hold'|'out', t, p0,p1,q0,q1, onArrive }
+function inspect(obj, home, onArrive) {
+  const g = obj.g; const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+  const target = fwd.multiplyScalar(1.1);
+  const q = camera.quaternion.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 1.3));
+  insp = { obj, home: home.clone(), homeQ: g.quaternion.clone(), state: 'in', t: 0, p0: g.position.clone(), p1: target, q0: g.quaternion.clone(), q1: q, s0: 1, s1: 1, onArrive };
+  setLight(false); refreshUI();
+}
+function endInspect() {
+  if (!insp || insp.state !== 'hold') return;
+  const g = insp.obj.g;
+  Object.assign(insp, { state: 'out', t: 0, p0: g.position.clone(), p1: insp.home, q0: g.quaternion.clone(), q1: insp.homeQ, s0: g.scale.x, s1: 1 });
+  refreshUI();
+}
+$('btnBack').addEventListener('click', endInspect);
+const qr = new THREE.Quaternion(), ax1 = new THREE.Vector3(), ax2 = new THREE.Vector3();
+function rotateHeld(dx, dy) {
+  const g = insp.obj.g;
+  ax1.set(0, 1, 0).applyQuaternion(camera.quaternion); ax2.set(1, 0, 0).applyQuaternion(camera.quaternion);
+  g.quaternion.premultiply(qr.setFromAxisAngle(ax1, dx * 0.012)); g.quaternion.premultiply(qr.setFromAxisAngle(ax2, dy * 0.012));
+}
+
+/* ================= 部屋の移動・暗転 ================= */
+function fadeDark(mesh, dur) { const s = performance.now(); const f = () => { const k = Math.min(1, (performance.now() - s) / (dur * 1000)); mesh.material.opacity = k; if (k < 1) requestAnimationFrame(f); }; f(); }
+function openDoorAnim(door, cb) { busy = true; refreshUI(); fadeDark(door.dark, 0.6); setTimeout(() => { busy = false; cb(); }, 700); }
+function blackIn(cb) { const b = $('black'); $('btext').textContent = ''; b.classList.remove('clear'); setTimeout(cb, 650); }
+function blackOut() { $('black').classList.add('clear'); }
+function loadRoom(id) {
+  if (room) scene.remove(room.grp);
+  const r = ROOMS[id]();
+  room = Object.assign({ id }, r); scene.add(room.grp);
+  needCalib = true; if (mode !== 'gyro') { dragYaw = 0; dragPitch = 0; }
+}
+function goRoom(id) {
+  busy = true; refreshUI();
+  blackIn(() => {
+    if (!ROOMS[id]) { busy = false; playing = false; refreshUI(); $('btext').textContent = 'つづく'; endShown = true; return; }
+    loadRoom(id); busy = false; refreshUI(); setTimeout(blackOut, 200);
+  });
+}
+let endShown = false;
+
+/* ================= 揺れ（見ている向きは動かさず、部屋の線だけを震わせる） ================= */
+let quakeT = 0;
+function quake(t) { quakeT = Math.max(quakeT, t); }
+
+/* ================= プロローグと導入 ================= */
+const PROLOGUE = [
+  '意識を失っていたようだ',
+  '学校が終わりいつも通り、何気ない毎日を過ごしていたような気がする',
+  '周りからは良い子に見られているが',
+  'そろそろ良い子を演じるのも疲れてきた',
+  '期待に応える中で、自分が消えていく感覚',
+  'そんな事を考えていると、路地裏から何か声が聞こえた気がした',
+  '気になって路地裏に入ったと思う',
+  'その後のことは覚えていない'
+];
+let pro = null, introT = -1;
+function proAdvance() {
+  const l = PROLOGUE[pro.i];
+  if (pro.c < l.length) { pro.c = l.length; return; }
+  pro.i++; pro.c = 0;
+  if (pro.i >= PROLOGUE.length) { pro = null; $('btext').textContent = ''; introT = 0; $('noise').hidden = false; rumble(1.8, true); }
+}
+$('black').addEventListener('click', () => { if (pro) proAdvance(); else if (endShown) location.reload(); });
+function drawNoise(k) {
+  const c = $('noise'); if (c.width !== innerWidth) { c.width = innerWidth; c.height = innerHeight; }
+  const g = c.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, c.width, c.height);
+  for (let i = 0; i < 40 * k; i++) { g.fillStyle = Math.random() < 0.7 ? '#fff' : '#555'; g.fillRect(Math.random() * c.width, Math.random() * c.height, 20 + Math.random() * 300, 1 + Math.random() * 6); }
+}
+function beginS1() {
+  loadRoom('s1'); playing = true; refreshUI(); blackOut();
+  setTimeout(() => say(['この部屋は何だろう。閉じ込められた？', '窓はあるが、扉が見当たらない。', 'どうしたらいいんだろう'], () => startHint(true), true), 700);
+}
+
+/* ================= タイトル ================= */
+let camTried = false;
+function goFullscreen() {
+  const el = document.documentElement;
+  try { const r = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : (el.webkitRequestFullscreen ? el.webkitRequestFullscreen() : null); if (r && r.catch) r.catch(() => {}); } catch (e) {}
+}
+async function askPermissions() {
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function')
+      await Promise.race([DeviceOrientationEvent.requestPermission(), new Promise(r => setTimeout(r, 8000))]);
+  } catch (e) {}
+  // 結末で使うカメラの許可だけを先に取り、すぐに止める（ゲーム中は使わない）
+  if (!camTried && window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    camTried = true;
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
+      .then(s => s.getTracks().forEach(t => t.stop())).catch(() => {});
+  }
+  setTimeout(() => { if (gotGyro) mode = 'gyro'; }, 600);
+}
+function hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
+function toTitle(msg) {
+  playing = false; dlg = null; hint = null; $('arrow').hidden = true; refreshUI();
+  $('title').hidden = false; $('tCont').disabled = !hasSave();
+  if (msg) toast(msg);
+}
+$('tNew').addEventListener('click', async () => {
+  goFullscreen(); audio(); await askPermissions();
+  Object.assign(G, { flags: newFlags(), log: [] }); unlocked.btnLook = false; unlocked.btnRed = false;
+  $('title').hidden = true; $('black').classList.remove('clear'); pro = { i: 0, c: 0 };
+});
+$('tCont').addEventListener('click', async () => {
+  let d = null; try { d = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) {}
+  if (!d || !ROOMS[d.scr]) return;
+  goFullscreen(); audio(); await askPermissions();
+  G.flags = Object.assign(newFlags(), d.flags); G.log = d.log || [];
+  unlocked.btnLook = !!G.flags.ev.ctrlSeen; unlocked.btnRed = !!G.flags.red;
+  $('title').hidden = true;
+  blackIn(() => { loadRoom(d.scr); playing = true; refreshUI(); setTimeout(blackOut, 200); });
+});
+let toastT = 0;
+function toast(s) { const el = $('toast'); el.textContent = s; el.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 1600); }
+
+/* ================= キーボード（パソコンでの確認用） ================= */
 const keys = new Set();
 window.addEventListener('keydown', e => {
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
   if (e.repeat) return; keys.add(e.code);
-  if (e.code === 'KeyJ') setLight(true);
-  if (e.code === 'KeyE' && !$('btnInspect').disabled) startInspect();
-  if (e.code === 'Escape' || e.code === 'Backspace') { if (state === 'inspect') endInspect(); }
+  if (pro) { if (['KeyE', 'Enter', 'Space'].includes(e.code)) proAdvance(); return; }
+  if (codeOpen) {
+    if (e.code === 'ArrowUp') { codeVal[0] = (codeVal[0] + 1) % 10; renderCode(); }
+    if (e.code === 'ArrowDown') { codeVal[0] = (codeVal[0] + 9) % 10; renderCode(); }
+    if (['KeyE', 'Enter'].includes(e.code)) closeCode(true);
+    if (['Escape', 'Backspace'].includes(e.code)) closeCode(false);
+    return;
+  }
+  if (manualOpen) { if (['Escape', 'KeyE', 'Enter'].includes(e.code)) $('manClose').click(); return; }
+  if (logOpen) { if (['Escape', 'KeyE', 'Enter'].includes(e.code)) $('logClose').click(); return; }
+  if (menuOpen) { if (e.code === 'Escape') closeMenu(); return; }
+  if (!playing) return;
+  if (dlg) { if (['KeyE', 'Enter', 'Space'].includes(e.code)) dialogAdvance(); return; }
+  if (insp) { if (['Escape', 'Backspace', 'KeyE'].includes(e.code)) endInspect(); return; }
+  if (e.code === 'Escape') openMenu();
+  if (['KeyE', 'Enter'].includes(e.code) && !$('btnLook').hidden && !$('btnLook').disabled) examine();
+  if (e.code === 'KeyJ' && unlocked.btnRed) setLight(true);
 });
 window.addEventListener('keyup', e => { keys.delete(e.code); if (e.code === 'KeyJ') setLight(false); });
 window.addEventListener('blur', () => { keys.clear(); setLight(false); });
 
-/* ---------- 調べる ---------- */
-let state = 'look';        // look | toFront | inspect | back
-let anim = null;
-const camRight = new THREE.Vector3(), camUp = new THREE.Vector3(), qr = new THREE.Quaternion();
-function rotateBox(dx, dy) {
-  camRight.set(1, 0, 0).applyQuaternion(camera.quaternion);
-  camUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
-  const o = boxItem.obj;
-  o.quaternion.premultiply(qr.setFromAxisAngle(camUp, dx * 0.012));
-  o.quaternion.premultiply(qr.setFromAxisAngle(camRight, dy * 0.012));
-}
-function startInspect() {
-  if (state !== 'look') return;
-  const o = boxItem.obj;
-  fwd.set(0, 0, -1).applyQuaternion(camera.quaternion);
-  const target = camera.position.clone().add(fwd.multiplyScalar(1.6));
-  anim = { t: 0, dur: 0.6, p0: o.position.clone(), p1: target, q0: o.quaternion.clone(), q1: o.quaternion.clone(), s0: 1, s1: 1 };
-  state = 'toFront';
-  document.body.classList.add('inspect'); $('dim').style.opacity = 1;
-  words.forEach(w => w.mesh.visible = false); room.visible = false;
-  $('btnInspect').hidden = true; $('btnBack').hidden = false;
-}
-function endInspect() {
-  if (state !== 'inspect') return;
-  const o = boxItem.obj;
-  anim = { t: 0, dur: 0.6, p0: o.position.clone(), p1: boxItem.home.clone(), q0: o.quaternion.clone(), q1: boxItem.homeQ.clone(), s0: o.scale.x, s1: 1 };
-  state = 'back'; $('dim').style.opacity = 0; $('btnBack').hidden = true;
-}
-$('btnInspect').addEventListener('click', startInspect);
-$('btnBack').addEventListener('click', endInspect);
-$('btnFront').addEventListener('click', calibrate);
+/* ================= 調べる ================= */
+let aimed = null;
+function examine() { if (aimed && room.targets[aimed]) room.targets[aimed].examine(); }
+$('btnLook').addEventListener('click', examine);
 
-/* ---------- 表示まわり ---------- */
-let toastT = 0;
-function toast(s) { const el = $('toast'); el.textContent = s; el.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 1400); }
-function updateCount() { $('count').textContent = `見つけた ${foundCount} / ${WORDS.length + 1}`; }
-let camOK = false, camWhy = '';
-function updateStatus() {
-  $('status').textContent = `カメラ：${camOK ? '背面' : 'なし（白い部屋）'}　向き：${mode === 'gyro' ? 'ジャイロ' : 'ドラッグ'}` + (camWhy ? `\n${camWhy}` : '');
-}
+/* ================= 毎フレーム ================= */
+const fwd = new THREE.Vector3(), tmp = new THREE.Vector3();
+const ease = t => t * t * (3 - 2 * t);
+let last = performance.now();
 function resize() {
-  const w = window.innerWidth, h = window.innerHeight;
-  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
-  const r = Math.tan(LIGHT_ANGLE) / Math.tan(camera.fov * D2R / 2) * (h / 2);
+  const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+  const r = Math.tan(LIGHT) / Math.tan(camera.fov * D2R / 2) * (h / 2);
   document.documentElement.style.setProperty('--lr', r.toFixed(1) + 'px');
 }
-window.addEventListener('resize', resize);
-
-/* ---------- 開始 ---------- */
-let started = false;
-function applyCamera() {
-  renderer.setClearColor(0xffffff, camOK ? 0 : 1);
-  room.visible = !camOK && state === 'look';
-  video.style.visibility = camOK ? 'visible' : 'hidden';
-  updateStatus();
-}
-// 画面を開始する（何度呼ばれても1回だけ）
-function finish() {
-  if (started) return; started = true;
-  window.__log('開始');
-  applyCamera();
-  $('start').hidden = true;
-  const checkGyro = () => { if (gotGyro && mode !== 'gyro') { mode = 'gyro'; needCalib = true; } updateStatus(); };
-  setTimeout(checkGyro, 800); setTimeout(checkGyro, 3000);
-}
-// カメラ映像を受け取ったときの処理（開始のあとに届いても使う）
-function attachStream(s) {
-  window.__log('カメラ映像を受け取った');
-  try {
-    video.srcObject = s; video.hidden = false;
-    const p = video.play(); if (p && p.then) p.then(() => window.__log('映像を再生'), e => window.__log('再生できず：' + e.name));
-  } catch (e) { window.__log('映像の設定で失敗：' + e.name); }
-  camOK = true; camWhy = ''; applyCamera();
-}
-async function start() {
-  const b = $('btnStart'); b.disabled = true;
-  // 3秒たったら「カメラなしで続ける」を出す
-  setTimeout(() => { if (!started) $('btnSkip').hidden = false; }, 3000);
-  try {
-    // iPhone は、ボタンを押したときに向きのセンサーの許可を求める
-    b.textContent = 'センサーを準備中…'; window.__log('センサー');
-    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-      try { await Promise.race([DeviceOrientationEvent.requestPermission(), new Promise(r => setTimeout(r, 8000))]); } catch (e) {}
-    }
-    b.textContent = 'カメラを準備中…';
-    window.__log('HTTPS：' + (window.isSecureContext ? 'はい' : 'いいえ'));
-    if (!window.isSecureContext) { camWhy = 'この開き方ではカメラが使えない（HTTPSではない）'; finish(); return; }
-    if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) { camWhy = 'このブラウザではカメラが使えない'; finish(); return; }
-    window.__log('カメラを要求');
-    const tid = setTimeout(() => { if (!camOK) { camWhy = 'カメラの応答が遅い（届いたら映す）'; finish(); } }, 8000);
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
-      .then(s => { clearTimeout(tid); attachStream(s); finish(); })
-      .catch(e => {
-        clearTimeout(tid); window.__log('カメラ失敗：' + e.name);
-        camOK = false; camWhy = e.name === 'NotAllowedError' ? 'カメラが許可されなかった' : 'カメラを開けなかった（' + e.name + '）';
-        if (started) applyCamera(); else finish();
-      });
-  } catch (e) {
-    window.__showErr('開始で止まりました：' + e.name + ' ' + e.message);
-    finish();
-  }
-}
-$('btnStart').addEventListener('click', start);
-$('btnSkip').addEventListener('click', () => { camWhy = camWhy || 'カメラなしで開始'; finish(); });
-
-/* ---------- 毎フレーム ---------- */
-let last = performance.now();
-const ease = t => t * t * (3 - 2 * t);
-function frame(now) {
-  const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  if (state === 'look') {
-    if (mode === 'gyro' && ori) {
-      if (needCalib) { needCalib = false; calibrate(); }
-      gyroQuat(camera.quaternion, true);
-    } else {
+addEventListener('resize', resize);
+function loopFrame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  // 向き
+  if (mode === 'gyro' && ori) { if (needCalib) { needCalib = false; calibrate(); } gyroQuat(camera.quaternion, true); }
+  else {
+    if (!insp) {
       if (keys.has('ArrowLeft')) dragYaw += dt * 1.6;
       if (keys.has('ArrowRight')) dragYaw -= dt * 1.6;
-      if (keys.has('ArrowUp')) dragPitch = Math.min(1.4, dragPitch + dt * 1.2);
-      if (keys.has('ArrowDown')) dragPitch = Math.max(-1.4, dragPitch - dt * 1.2);
-      euler.set(dragPitch, dragYaw, 0, 'YXZ'); camera.quaternion.setFromEuler(euler);
+      if (keys.has('ArrowUp')) dragPitch = Math.min(1.3, dragPitch + dt * 1.2);
+      if (keys.has('ArrowDown')) dragPitch = Math.max(-1.3, dragPitch - dt * 1.2);
     }
+    euler.set(dragPitch, dragYaw, 0, 'YXZ'); camera.quaternion.setFromEuler(euler);
   }
-  fwd.set(0, 0, -1).applyQuaternion(camera.quaternion);
-
-  // 言葉：光の円に入ると見える。一度見つけた言葉は薄く残る
-  for (const w of words) {
-    const lit = lightOn && state === 'look' && fwd.angleTo(w.dir) < LIGHT_ANGLE;
-    if (lit && !w.found) { w.found = true; foundCount++; updateCount(); }
-    const target = lit ? 1 : (w.found ? 0.45 : 0);
-    w.op += (target - w.op) * Math.min(1, dt * 10);
-    w.mesh.material.opacity = w.op;
+  // 導入のノイズ
+  if (introT >= 0) {
+    introT += dt; drawNoise(Math.max(0, 1 - introT / 1.8));
+    if (introT > 2.0) { introT = -1; $('noise').hidden = true; beginS1(); }
   }
+  if (pro) { pro.c = Math.min(PROLOGUE[pro.i].length, pro.c + dt * 14); $('btext').textContent = PROLOGUE[pro.i].slice(0, Math.floor(pro.c)); }
+  if (dlg) { const l = dlg.lines[dlg.i]; dlg.c = Math.min(l.length, dlg.c + dt * 18); $('dtext').textContent = l.slice(0, Math.floor(dlg.c)); $('dmore').hidden = dlg.c < l.length; }
+  dimS.material.opacity += ((insp && insp.state !== 'out' ? 0.6 : 0) - dimS.material.opacity) * Math.min(1, dt * 6);
+  if (flashA > 0) { flashA = Math.max(0, flashA - dt * 0.4); $('flash').style.opacity = flashA; }
 
-  // 箱
-  const o = boxItem.obj;
-  if (state === 'look') $('btnInspect').disabled = fwd.angleTo(boxItem.dir) > INSPECT_ANGLE;
-  if (anim) {
-    anim.t += dt / anim.dur; const k = ease(Math.min(1, anim.t));
-    o.position.lerpVectors(anim.p0, anim.p1, k);
-    o.quaternion.slerpQuaternions(anim.q0, anim.q1, k);
-    o.scale.setScalar(anim.s0 + (anim.s1 - anim.s0) * k);
-    if (anim.t >= 1) {
-      anim = null;
-      if (state === 'toFront') state = 'inspect';
-      else if (state === 'back') {
-        state = 'look'; document.body.classList.remove('inspect');
-        words.forEach(w => w.mesh.visible = true); room.visible = !camOK;
-        $('btnInspect').hidden = false;
+  if (room) {
+    if (room.tick) room.tick(dt);
+    // 揺れ
+    if (quakeT > 0) { quakeT -= dt; const k = Math.max(0, quakeT) * 0.025; room.grp.position.set((Math.random() - .5) * k, (Math.random() - .5) * k, (Math.random() - .5) * k); }
+    else room.grp.position.set(0, 0, 0);
+    fwd.set(0, 0, -1).applyQuaternion(camera.quaternion);
+    // 赤い光：光の円に入った隠れた文字は、見えるようになり、そのあとも消えない
+    for (const k in room.targets) {
+      const t = room.targets[k];
+      if (t.hidden) {
+        if (lightOn && !insp && fwd.angleTo(tmp.copy(t.pos).normalize()) < LIGHT) G.flags.seen[t.hidden] = true;
+        if (t.label) { t.label.visible = !!G.flags.seen[t.hidden] && !insp; t.label.lookAt(camera.position); }
+      }
+    }
+    // 中央の丸に入っているもの（いちばん近いもの）
+    aimed = null; let best = AIM;
+    if (playing && !dlg && !insp && !busy) for (const k in room.targets) {
+      const t = room.targets[k]; if (!t.act()) continue;
+      const a = fwd.angleTo(tmp.copy(t.pos).normalize()); if (a < best) { best = a; aimed = k; }
+    }
+    $('btnLook').disabled = !aimed;
+    $('reticle').classList.toggle('aim', !!aimed && !lightOn);
+    $('reticle').classList.toggle('lit', lightOn);
+    // 手元に引き寄せた物
+    if (insp) {
+      const g = insp.obj.g;
+      if (insp.state !== 'hold') {
+        insp.t = Math.min(1, insp.t + dt / 0.6); const e = ease(insp.t);
+        g.position.lerpVectors(insp.p0, insp.p1, e); g.quaternion.slerpQuaternions(insp.q0, insp.q1, e); g.scale.setScalar(insp.s0 + (insp.s1 - insp.s0) * e);
+        if (insp.t >= 1) {
+          if (insp.state === 'in') { insp.state = 'hold'; refreshUI(); if (insp.onArrive) insp.onArrive(); }
+          else { insp = null; refreshUI(); }
+        }
       }
     }
   }
-  // 底の言葉：調べている間、光を当てて、底がこちらを向いているときだけ見える
-  let hiddenOp = 0;
-  if (state === 'inspect' && lightOn) {
-    const n = new THREE.Vector3(0, -1, 0).applyQuaternion(o.quaternion);
-    const toCam = camera.position.clone().sub(o.position).normalize();
-    const facing = n.dot(toCam);
-    if (facing > 0.35) {
-      hiddenOp = Math.min(1, (facing - 0.35) / 0.35);
-      if (facing > 0.75 && !boxItem.found) { boxItem.found = true; foundCount++; updateCount(); }
-    }
-  }
-  const hm = boxItem.hidden.material; hm.opacity += (hiddenOp - hm.opacity) * Math.min(1, dt * 10);
-
   renderer.render(scene, camera);
-  requestAnimationFrame(frame);
+  requestAnimationFrame(loopFrame);
 }
 
-Promise.race([
-  document.fonts && document.fonts.load ? document.fonts.load('bold 120px DotGothic16') : Promise.resolve(),
-  new Promise(r => setTimeout(r, 3000))   // フォントが届かなくても3秒で先へ進む
-])
+Promise.race([document.fonts && document.fonts.load ? document.fonts.load('20px DotGothic16') : Promise.resolve(), new Promise(r => setTimeout(r, 3000))])
   .catch(() => {}).then(() => {
-    try { buildWorld(); resize(); updateCount(); requestAnimationFrame(frame); }
-    catch (e) { window.__showErr('準備中に止まりました：' + e.message); return; }
-    const b = $('btnStart'); b.disabled = false; b.textContent = 'はじめる';
+    resize(); requestAnimationFrame(loopFrame); refreshUI();
+    $('tNew').disabled = false; $('tNew').textContent = 'はじめから'; $('tCont').disabled = !hasSave();
   });
+// 自動テスト用に、状態を読めるようにしておく
+window.__colors = { G, get room() { return room && room.id; }, get aimed() { return aimed; }, get insp() { return insp && insp.state; },
+  lookAt(x, y, z) { const v = new THREE.Vector3(x, y, z).normalize(); dragYaw = Math.atan2(-v.x, -v.z); dragPitch = Math.asin(v.y); } };
 })();
 </script>
 
