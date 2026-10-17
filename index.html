@@ -148,8 +148,8 @@ body.edPads #editor .panel{margin:0 auto}
 #light.white{background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.55) 0,rgba(255,255,240,.3) calc(var(--lr,140px)*.8),rgba(255,255,255,0) calc(var(--lr,140px)*1.2));mix-blend-mode:normal}
 #reticle.lit.white{border-color:rgba(160,160,160,.9);box-shadow:0 0 18px rgba(255,255,255,.9) inset}
 #circle{position:fixed;inset:0;width:100%;height:100%;background:var(--paper);cursor:pointer}
-#manual .whiteBtn{position:absolute;width:82px;height:72px;border:3px solid #fff;background:#fff;box-shadow:0 0 30px 10px rgba(255,255,255,.9);opacity:0;transition:opacity 2.4s}
-#manual .whiteBtn.show{opacity:1}
+#manual .wfade{opacity:0;transition:opacity 3.5s ease-in}
+#manual .wfade.show{opacity:1}
 #btext .title{font-size:64px;letter-spacing:.06em}
 #btext .title .s{transition:opacity 3s}
 @media (prefers-reduced-motion:reduce){#arrow,.blink3,.btn.appear{animation:none}#black,#light{transition:none}}
@@ -852,7 +852,7 @@ const ROOMS = {
           bt.pulse = 1; click();
           const p = F.ev.bprog || 0;
           if (bt.i === p) F.ev.bprog = p + 1; else F.ev.bprog = (bt.i === 0) ? 1 : 0;
-          if (F.ev.bprog >= 3) { F.ev.s4_key = true; F.ev.bprog = 0; key.visible = true; keyPop = 0; rumble(0.5); }
+          if (F.ev.bprog >= 3) { F.ev.s4_key = true; F.ev.bprog = 0; key.visible = true; keyPop = 0; rumble(0.5); say('鍵が現れた。'); }
         } };
     });
     const tick = dt => {
@@ -915,7 +915,7 @@ const ROOMS = {
       term: { pos: termPos, act: () => true,
         examine() {
           if (!F.ev.c4_closed) {
-            F.ev.c4_closed = true; quake(0.8); rumble(1.2); back.g.visible = true; back.plate.position.y = 2.1; backDrop = 0;
+            F.ev.c4_closed = true; rumble(1.2); back.g.visible = true; back.plate.position.y = 2.1; backDrop = 0;
             say(C4_TALK, () => { F.ev.c4_gone = true; callT = 0; }, true);
             return;
           }
@@ -957,34 +957,80 @@ const ROOMS = {
     return { grp: sh.grp, targets, tick };
   },
 
-  // ---- ステージ2-1：時代で変わる部屋。過去はアーチの奥に透明な箱（のぞいて光と色を当てる）、植物（芽・若木・大木）、鍵穴は過去だけ、扉は現在の仕切りに ----
+  // ---- ステージ2-1：時代で変わる部屋。仕切りの壁のアーチ（過去）と崩れた穴（未来）から、同じ奥の場所がのぞける ----
+  //   現在：過去の人 → 鍵穴（緑の光・緑の色）→ 鍵をさすと扉 → 「とびらがとけている」
+  //   過去：アーチの奥に透明な箱 → 緑の色で実体に（閉じたまま）
+  //   未来：崩れた穴の奥に、古びた同じ箱 →「はこがある」→「はこがあく」→ 中の鍵
   s5: () => {
     const W = 2.5, D = 2.5, F = G.flags, PX = 1.0;
     const sh = roomShell(W, D, { wall: 0xffffff, floor: 0xffffff, edge: 0x000000, gridColor: 0xd4d4d4 });
     sh.place('front'); sh.place('back'); sh.place('left'); sh.place('right');
-    // 仕切りの壁：時代ごとに3枚（ローカル x ＝ 奥行き z）。現在は扉ができる場所に穴をあけておき、扉でふさぐ
-    const DZ = 0.6;   // 扉（と鍵穴）の位置
+    const OZ = -0.6;   // のぞき口（アーチ・崩れた穴）の位置（奥行き）
+    const DZ = 1.0;    // 鍵穴・扉の位置
     const part = {};
     const mkPart = (holes) => { const g = wall(D * 2, holes, faceMat(0xffffff), INK); g.position.set(PX, FLOOR, 0); g.rotation.y = -Math.PI / 2; sh.grp.add(g); return g; };
     part.present = mkPart([]);
-    part.past = mkPart([{ x: -1.2, y: 0.95, w: 0.9, h: 1.9, noEdge: true }]);
-    part.future = mkPart([{ x: 1.6, y: 0.9, w: 1.0, h: 1.0, noEdge: true }]);
+    part.past = mkPart([{ x: OZ, y: 0.95, w: 0.9, h: 1.9, noEdge: true }]);
+    part.future = mkPart([{ x: OZ, y: 0.9, w: 1.0, h: 1.0, noEdge: true }]);
     sh.grp.add(segs([[PX, FLOOR, -D], [PX, FLOOR, D], [PX, CEIL, -D], [PX, CEIL, D]]));
     // 過去：アーチの縁
-    const arch = []; for (let i = 0; i <= 16; i++) { const a = Math.PI * i / 16; arch.push([PX - 0.003, FLOOR + 1.45 + Math.sin(a) * 0.45, -1.2 + Math.cos(a) * 0.45]); }
+    const arch = []; for (let i = 0; i <= 16; i++) { const a = Math.PI * i / 16; arch.push([PX - 0.003, FLOOR + 1.45 + Math.sin(a) * 0.45, OZ + Math.cos(a) * 0.45]); }
     const archL = []; for (let i = 0; i < 16; i++) archL.push(arch[i], arch[i + 1]);
-    archL.push([PX - 0.003, FLOOR, -1.65], [PX - 0.003, FLOOR + 1.45, -1.65], [PX - 0.003, FLOOR, -0.75], [PX - 0.003, FLOOR + 1.45, -0.75]);
+    archL.push([PX - 0.003, FLOOR, OZ - 0.45], [PX - 0.003, FLOOR + 1.45, OZ - 0.45], [PX - 0.003, FLOOR, OZ + 0.45], [PX - 0.003, FLOOR + 1.45, OZ + 0.45]);
     part.past.userData.edge = segs(archL); sh.grp.add(part.past.userData.edge);
-    // 未来：崩れた穴のぎざぎざの縁と、床のがれき（のぞけるだけ）
-    const jag = [[1.1, 0.4], [1.25, 0.55], [1.2, 0.8], [1.35, 1.1], [1.3, 1.4], [1.6, 1.33], [1.85, 1.42], [2.1, 1.25], [2.0, 1.0], [2.1, 0.7], [1.95, 0.5], [2.1, 0.4]];
-    const jl = []; for (let i = 0; i < jag.length - 1; i++) jl.push([PX - 0.003, FLOOR + jag[i][1], jag[i][0]], [PX - 0.003, FLOOR + jag[i + 1][1], jag[i + 1][0]]);
-    jl.push([PX - 0.003, FLOOR + 0.4, 1.1], [PX - 0.003, FLOOR + 0.4, 2.1]);
-    for (const [x, z, s] of [[0.75, 1.4, 0.12], [0.6, 1.85, 0.09], [0.85, 2.05, 0.1]]) jl.push(...loop([[x - s, FLOOR + 0.004, z - s], [x + s, FLOOR + 0.004, z - s * 0.6], [x + s * 0.7, FLOOR + 0.004, z + s], [x - s * 0.8, FLOOR + 0.004, z + s * 0.7]]));
+    // 未来：崩れた穴のぎざぎざの縁と、床のがれき
+    const jag = [[-0.5, 0.4], [-0.35, 0.55], [-0.4, 0.8], [-0.25, 1.1], [-0.3, 1.4], [0, 1.33], [0.25, 1.42], [0.5, 1.25], [0.4, 1.0], [0.5, 0.7], [0.35, 0.5], [0.5, 0.4]];
+    const jl = []; for (let i = 0; i < jag.length - 1; i++) jl.push([PX - 0.003, FLOOR + jag[i][1], OZ + jag[i][0]], [PX - 0.003, FLOOR + jag[i + 1][1], OZ + jag[i + 1][0]]);
+    jl.push([PX - 0.003, FLOOR + 0.4, OZ - 0.5], [PX - 0.003, FLOOR + 0.4, OZ + 0.5]);
+    for (const [x, z, s] of [[0.8, OZ - 0.75, 0.1], [0.7, OZ + 0.7, 0.08], [0.85, OZ + 1.0, 0.09]]) jl.push(...loop([[x - s, FLOOR + 0.004, z - s], [x + s, FLOOR + 0.004, z - s * 0.6], [x + s * 0.7, FLOOR + 0.004, z + s], [x - s * 0.8, FLOOR + 0.004, z + s * 0.7]]));
     part.future.userData.edge = segs(jl); sh.grp.add(part.future.userData.edge);
-    // 鍵穴（過去だけ、仕切りの壁）
-    const kh = new THREE.Group(); kh.add(segs([...rect2(-0.1, -0.14, 0.1, 0.14, 0.004)]));
+    // 植物：のぞき口の手前。過去は芽、現在は若木、未来は葉の落ちた枯れ木（現在より少し大きい）と落ち葉
+    const PP = V(0.5, FLOOR, -0.15);
+    const plant = {};
+    plant.past = new THREE.Group(); plant.past.add(segs([[0, 0, 0], [0, 0.12, 0], [0, 0.1, 0], [0.06, 0.15, 0], [0, 0.1, 0], [-0.06, 0.15, 0]]));
+    plant.past.position.copy(PP); sh.grp.add(plant.past);
+    {
+      const g = new THREE.Group(), tr = 0.08, th = 1.0;
+      g.add(segs([[-tr, 0, 0], [-tr * 0.7, th, 0], [tr, 0, 0], [tr * 0.7, th, 0], [0, 0, -tr], [0, th, -tr * 0.7], [0, 0, tr], [0, th, tr * 0.7]]));
+      const sp = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5, 1), faceMat(0xffffff)); sp.position.y = 1.25; g.add(sp);
+      const se = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(0.5, 1)), INK); se.position.y = 1.25; g.add(se);
+      g.position.copy(PP); sh.grp.add(g); plant.present = g;
+    }
+    {
+      const g = new THREE.Group(), tr = 0.1, th = 1.2, L = [[-tr, 0, 0], [-tr * 0.6, th, 0], [tr, 0, 0], [tr * 0.6, th, 0], [0, 0, -tr], [0, th, -tr * 0.6], [0, 0, tr], [0, th, tr * 0.6]];
+      // 枝：幹の先から、細く折れ曲がって広がる
+      const br = (x0, y0, z0, dx, dy, dz, n, k) => { let p = [x0, y0, z0]; for (let i = 0; i < n; i++) { const q = [p[0] + dx * k, p[1] + dy * k, p[2] + dz * k]; L.push(p, q); if (i === 1) L.push(q, [q[0] + dz * 0.25, q[1] + 0.15, q[2] - dx * 0.25]); p = q; dx *= 0.8; dy += 0.05; } };
+      br(0, th, 0, 0.5, 0.6, 0.1, 3, 0.35); br(0, th, 0, -0.45, 0.65, 0.2, 3, 0.35); br(0, th, 0, 0.1, 0.7, -0.5, 3, 0.33); br(0, th, 0, -0.1, 0.75, 0.45, 3, 0.3);
+      br(0, th * 0.7, 0, 0.55, 0.35, -0.2, 2, 0.35); br(0, th * 0.6, 0, -0.5, 0.3, -0.25, 2, 0.3);
+      g.add(segs(L, lineMat(0x3a3a3a)));
+      // 落ち葉（床に散らばる小さな葉）
+      const lv = []; for (let i = 0; i < 26; i++) { const a = i * 2.39, r = 0.25 + ((i * 37) % 11) / 11 * 0.75, x = Math.cos(a) * r, z = Math.sin(a) * r, s = 0.045, b = a * 1.7;
+        const c = Math.cos(b) * s, d = Math.sin(b) * s; lv.push(...loop([[x - c, -FLOOR * 0 + 0.004, z - d], [x - d * 0.5, 0.004, z + c * 0.5], [x + c, 0.004, z + d], [x + d * 0.5, 0.004, z - c * 0.5]]), [x - c, 0.004, z - d], [x + c, 0.004, z + d]); }
+      g.add(segs(lv, lineMat(0x6a6a6a)));
+      g.position.copy(PP); sh.grp.add(g); plant.future = g;
+    }
+    const pot = []; for (let i = 0; i < 20; i++) { const a = i / 20 * Math.PI * 2, b = (i + 1) / 20 * Math.PI * 2; pot.push([PP.x + Math.cos(a) * 0.3, FLOOR + 0.004, PP.z + Math.sin(a) * 0.3], [PP.x + Math.cos(b) * 0.3, FLOOR + 0.004, PP.z + Math.sin(b) * 0.3]); }
+    sh.grp.add(segs(pot, lineMat(0x9a9a9a)));
+    // 箱：仕切りの向こうの奥（アーチからも崩れた穴からも見える場所）。過去は透明 → 緑の色で実体に。未来には古びて残っている
+    const TB = V(2.1, FLOOR + 0.21, OZ * 2.1);
+    const tbLines = boxLines(0.42, 0.42, 0.42, new THREE.LineDashedMaterial({ color: 0x0f8a3a, dashSize: 0.04, gapSize: 0.03, transparent: true, opacity: 0 }));
+    tbLines.computeLineDistances(); tbLines.position.copy(TB); sh.grp.add(tbLines);
+    const crate = makeCrate(0.42); crate.g.position.copy(TB); crate.g.lookAt(0, TB.y, 0); sh.grp.add(crate.g);
+    if (F.ev.tbox_open) crate.lid.rotation.x = -1.9;
+    // 古びた印（未来だけ）：ひび
+    const crack = segs([[-0.21, 0.12, 0.212], [-0.08, 0.02, 0.212], [-0.08, 0.02, 0.212], [-0.12, -0.1, 0.212], [0.21, -0.05, 0.212], [0.1, -0.12, 0.212], [0.212, 0.15, -0.1], [0.212, 0.0, 0.05]], lineMat(0x555555));
+    crate.g.add(crack);
+    // 箱の中の鍵
+    const key = new THREE.Group(); const ring = []; for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2, b = (i + 1) / 16 * Math.PI * 2; ring.push([Math.cos(a) * 0.035 - 0.07, 0, Math.sin(a) * 0.035], [Math.cos(b) * 0.035 - 0.07, 0, Math.sin(b) * 0.035]); }
+    key.add(segs([...ring, [-0.035, 0, 0], [0.09, 0, 0], [0.06, 0, 0], [0.06, 0, 0.03], [0.09, 0, 0], [0.09, 0, 0.04]], lineMat(0x000000)));
+    key.position.set(0, -0.2, 0); key.scale.setScalar(1.3); crate.g.add(key);
+    const tbLab = redMark('「はこがある」', 0.5); tbLab.position.copy(TB).add(V(0, 0.42, 0)); sh.grp.add(tbLab);
+    // 鍵穴（現在だけ、仕切りの壁）：過去の人を見たあと、緑の光で見つけ、緑の色で実体に
+    const kh = new THREE.Group(); const khMat = new THREE.LineDashedMaterial({ color: 0x0f8a3a, dashSize: 0.02, gapSize: 0.015, transparent: true, opacity: 0 });
     const khr = []; for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2, b = (i + 1) / 12 * Math.PI * 2; khr.push([Math.cos(a) * 0.03, 0.03 + Math.sin(a) * 0.03, 0.006], [Math.cos(b) * 0.03, 0.03 + Math.sin(b) * 0.03, 0.006]); }
-    kh.add(segs([...khr, [-0.015, 0.01, 0.006], [-0.03, -0.07, 0.006], [0.015, 0.01, 0.006], [0.03, -0.07, 0.006], [-0.03, -0.07, 0.006], [0.03, -0.07, 0.006]]));
+    const khPts = [...rect2(-0.1, -0.14, 0.1, 0.14, 0.004), ...khr, [-0.015, 0.01, 0.006], [-0.03, -0.07, 0.006], [0.015, 0.01, 0.006], [0.03, -0.07, 0.006], [-0.03, -0.07, 0.006], [0.03, -0.07, 0.006]];
+    const khReal = segs(khPts); kh.add(khReal);
+    const khGhost = segs(khPts, khMat); khGhost.computeLineDistances(); kh.add(khGhost);
     kh.position.set(PX - 0.004, FLOOR + 1.3, DZ); kh.rotation.y = -Math.PI / 2; sh.grp.add(kh);
     const khPos = V(PX, FLOOR + 1.3, DZ);
     // 扉（現在だけ、仕切りの壁。鍵をさすとあらわれる）
@@ -992,49 +1038,28 @@ const ROOMS = {
     if (F.ev.s5_melt) door.dark.material.opacity = 1;
     const DP = V(PX, FLOOR + 1.0, DZ);
     const doorLab = redMark('「とびらがとじている」', 0.5); doorLab.position.set(PX - 0.12, FLOOR + 1.0, DZ); sh.grp.add(doorLab);
-    // 植物：アーチの手前。過去は芽（アーチの奥がのぞける）、現在は若木、未来は大木
-    const PP = V(0.45, FLOOR, -0.65);
-    const plant = {};
-    const tree = (trunkH, trunkR, canopyR, canopyY) => {
-      const g = new THREE.Group();
-      g.add(segs([[-trunkR, 0, 0], [-trunkR * 0.7, trunkH, 0], [trunkR, 0, 0], [trunkR * 0.7, trunkH, 0], [0, 0, -trunkR], [0, trunkH, -trunkR * 0.7], [0, 0, trunkR], [0, trunkH, trunkR * 0.7]]));
-      const sp = new THREE.Mesh(new THREE.IcosahedronGeometry(canopyR, 1), faceMat(0xffffff)); sp.position.y = canopyY; g.add(sp);
-      const se = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(canopyR, 1)), INK); se.position.y = canopyY; g.add(se);
-      g.position.copy(PP); sh.grp.add(g); return g;
-    };
-    plant.past = new THREE.Group(); plant.past.add(segs([[0, 0, 0], [0, 0.12, 0], [0, 0.1, 0], [0.06, 0.15, 0], [0, 0.1, 0], [-0.06, 0.15, 0]]));
-    plant.past.position.copy(PP); sh.grp.add(plant.past);
-    plant.present = tree(1.0, 0.08, 0.5, 1.25);
-    plant.future = tree(1.7, 0.22, 1.0, 1.75);
-    const pot = []; for (let i = 0; i < 20; i++) { const a = i / 20 * Math.PI * 2, b = (i + 1) / 20 * Math.PI * 2; pot.push([PP.x + Math.cos(a) * 0.3, FLOOR + 0.004, PP.z + Math.sin(a) * 0.3], [PP.x + Math.cos(b) * 0.3, FLOOR + 0.004, PP.z + Math.sin(b) * 0.3]); }
-    sh.grp.add(segs(pot, lineMat(0x9a9a9a)));
-    // 透明な箱：仕切りの向こう側、過去のアーチの奥。のぞいて緑の光で見つけ、緑の色で実体に。赤で「はこがある」→「はこがあく」。中に鍵
-    const TB = V(1.75, FLOOR + 0.21, -2.1);
-    const tbLines = boxLines(0.42, 0.42, 0.42, new THREE.LineDashedMaterial({ color: 0x0f8a3a, dashSize: 0.04, gapSize: 0.03, transparent: true, opacity: 0 }));
-    tbLines.computeLineDistances(); tbLines.position.copy(TB); sh.grp.add(tbLines);
-    const crate = makeCrate(0.42); crate.g.position.copy(TB); crate.g.lookAt(0, TB.y, 0); sh.grp.add(crate.g);
-    if (F.ev.tbox_open) crate.lid.rotation.x = -1.9;
-    // 箱の中の鍵
-    const key = new THREE.Group(); const ring = []; for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2, b = (i + 1) / 16 * Math.PI * 2; ring.push([Math.cos(a) * 0.035 - 0.07, 0, Math.sin(a) * 0.035], [Math.cos(b) * 0.035 - 0.07, 0, Math.sin(b) * 0.035]); }
-    key.add(segs([...ring, [-0.035, 0, 0], [0.09, 0, 0], [0.06, 0, 0], [0.06, 0, 0.03], [0.09, 0, 0], [0.09, 0, 0.04]], lineMat(0x000000)));
-    key.position.set(0, -0.2, 0); key.scale.setScalar(1.3); crate.g.add(key);
-    const tbLab = redMark('「はこがある」', 0.5); tbLab.position.copy(TB).add(V(0, 0.42, 0)); sh.grp.add(tbLab);
-    // 過去の人（現在だけ）：仕切りの壁の鍵穴の場所で何かをしている
+    // 過去の人（現在だけ）：鍵穴の場所で何かをしている
     const gh = makeGhost(); gh.g.position.set(PX - 0.45, FLOOR, DZ); sh.grp.add(gh.g);
+    const TB_REAL = { seen: 's5_tbox_d', flag: 'tbox_real', msg: '透明な箱が、実体になった。' };
+    const TB_EDIT = { text: 'はこがある', goal: 'はこがあく', flag: 'tbox_open', done() { F.ev.tbox_open = true; crate.opening = 0; say('箱が開いた。'); } };
+    const KH_REAL = { seen: 's5_kh_d', flag: 'kh_real', msg: '透明な鍵穴が、実体になった。' };
     const targets = {
-      tbox: { pos: TB.clone(), act: () => era === 'past' && (!!F.seen.s5_tbox_d || !!F.ev.tbox_real), hidden: 's5_tbox', label: tbLab,
-        canSee: () => !!F.ev.tbox_real && !F.ev.tbox_open,
-        real: { seen: 's5_tbox_d', flag: 'tbox_real', msg: '透明な箱が、実体になった。' },
-        edit: { text: 'はこがある', goal: 'はこがあく', flag: 'tbox_open', done() { F.ev.tbox_open = true; crate.opening = 0; say('箱が開いた。'); } },
+      tbox: { pos: TB.clone(), hidden: 's5_tbox', label: tbLab,
+        act: () => (era === 'past' && (!!F.seen.s5_tbox_d || !!F.ev.tbox_real)) || (era === 'future' && !!F.ev.tbox_real),
+        canSee: () => era === 'future' && !!F.ev.tbox_real && !F.ev.tbox_open,
+        get real() { return era === 'past' ? TB_REAL : null; },
+        get edit() { return era === 'future' ? TB_EDIT : null; },
         examine() {
           if (!F.ev.tbox_real) { say('透明な何かがある。'); return; }
-          if (!F.ev.tbox_open) { say(F.seen.s5_tbox ? '「はこがある」' : '箱だ。'); return; }
+          if (era === 'past') { say('箱だ。閉じている。'); return; }
+          if (!F.ev.tbox_open) { say(F.seen.s5_tbox ? '「はこがある」' : '古びた箱だ。'); return; }
           // 開いた箱：手元に引き寄せると、中に鍵が見える。調べると拾う
           inspect(crate, TB, { examineHeld: () => (!F.ev.hasKey && !F.ev.s5_door) ? () => { F.ev.hasKey = true; key.visible = false; say('鍵を拾った'); } : null });
         } },
-      keyhole: { pos: khPos, act: () => era === 'past' && !!F.seen.ghost_s5,
+      keyhole: { pos: khPos, act: () => era === 'present' && !!F.seen.ghost_s5 && (!!F.seen.s5_kh_d || !!F.ev.kh_real) && !F.ev.s5_door,
+        get real() { return era === 'present' ? KH_REAL : null; },
         examine() {
-          if (F.ev.s5_door) { say('鍵がささっている。'); return; }
+          if (!F.ev.kh_real) { say('透明な何かがある。'); return; }
           if (!F.ev.hasKey) { say('壁に鍵穴がある。'); return; }
           F.ev.hasKey = false; F.ev.s5_door = true; quake(0.8); rumble(1.0);
           say('鍵をさした。壁に扉があらわれた。', null, true);
@@ -1049,17 +1074,27 @@ const ROOMS = {
     let gclock = 0;
     const tick = dt => {
       for (const e of ERAS) { part[e].visible = e === era; if (part[e].userData.edge) part[e].userData.edge.visible = e === era; plant[e].visible = e === era; }
-      kh.visible = era === 'past';
-      door.g.visible = era === 'present' && !!F.ev.s5_door;
-      const inPast = era === 'past';
+      const inPast = era === 'past', inFut = era === 'future', inPre = era === 'present';
+      // 箱
       const glit = inPast && lit('green', TB);
       if (glit) F.seen.s5_tbox_d = true;
       tbLines.material.opacity += ((glit && !F.ev.tbox_real ? 1 : 0) - tbLines.material.opacity) * Math.min(1, dt * 8);
       tbLines.visible = tbLines.material.opacity > 0.02;
-      crate.g.visible = (inPast || (insp && insp.obj === crate)) && !!F.ev.tbox_real;
-      key.visible = !!F.ev.tbox_open && !F.ev.hasKey && !F.ev.s5_door;
+      const holding = !!(insp && insp.obj === crate);
+      crate.g.visible = !!F.ev.tbox_real && (inPast || inFut || holding);
+      crack.visible = inFut || holding;
+      if (inPast && !holding) crate.lid.rotation.x = 0; else if (F.ev.tbox_open && crate.opening == null) crate.lid.rotation.x = -1.9;
+      key.visible = (inFut || holding) && !!F.ev.tbox_open && !F.ev.hasKey && !F.ev.s5_door;
       crateTick(crate, dt);
-      const blueOn = lightColor() === 'blue' && !insp && era === 'present';
+      // 鍵穴
+      kh.visible = inPre && !F.ev.s5_door;
+      const klit = inPre && !!F.seen.ghost_s5 && lit('green', khPos);
+      if (klit) F.seen.s5_kh_d = true;
+      khReal.visible = !!F.ev.kh_real;
+      khMat.opacity += ((klit && !F.ev.kh_real ? 1 : 0) - khMat.opacity) * Math.min(1, dt * 8); khGhost.visible = khMat.opacity > 0.02;
+      door.g.visible = inPre && !!F.ev.s5_door;
+      // 過去の人
+      const blueOn = lightColor() === 'blue' && !insp && inPre;
       if (blueOn) gclock += dt;
       gh.arm.rotation.z = Math.sin(gclock * 6) * 0.5 + 0.7; gh.g.lookAt(0, FLOOR, 0);
       gh.mat.opacity += ((blueOn ? 0.95 : 0) - gh.mat.opacity) * Math.min(1, dt * 8); gh.g.visible = gh.mat.opacity > 0.02;
@@ -1078,7 +1113,14 @@ const ROOMS = {
     const F = G.flags, C = corridor(null, { noTerm: true }); C.build();
     const { W, D, sh } = C;
     const bulk = makeBulk(1.2, 2.2); placeOn(bulk.g, 'right', W, D, 0, 0, 0.004); sh.grp.add(bulk.g);
-    if (F.ev.c5_hole) bulk.plate.position.y = 2.1;
+    // 穴：隔壁そのものに、ぎざぎざの黒い穴があく（シャッターは開かない）
+    const hp = [[-0.42, 0], [-0.46, 0.4], [-0.38, 0.75], [-0.47, 1.1], [-0.36, 1.45], [-0.2, 1.62], [0.02, 1.7], [0.22, 1.6], [0.4, 1.5], [0.37, 1.15], [0.47, 0.8], [0.4, 0.45], [0.46, 0]];
+    const hShape = new THREE.Shape(); hp.forEach(([x, y], i) => i ? hShape.lineTo(x, y - 0.85) : hShape.moveTo(x, y - 0.85));
+    const hole = new THREE.Group(); hole.position.set(0, 0.85, 0.014); bulk.g.add(hole);
+    hole.add(new THREE.Mesh(new THREE.ShapeGeometry(hShape), new THREE.MeshBasicMaterial({ color: 0x000000 })));
+    const hl = []; for (let i = 0; i < hp.length - 1; i++) hl.push([hp[i][0], hp[i][1] - 0.85, 0.002], [hp[i + 1][0], hp[i + 1][1] - 0.85, 0.002]);
+    hole.add(segs(hl, lineMat(0x2a2a2a)));
+    hole.scale.setScalar(F.ev.c5_hole ? 1 : 0.001); hole.visible = !!F.ev.c5_hole;
     const lab = redMark('「HOLD」', 0.55); lab.position.set(W - 0.12, FLOOR + 1.1, 0); sh.grp.add(lab);
     let opening = null;
     const targets = Object.assign(C.targets, {
@@ -1089,7 +1131,7 @@ const ROOMS = {
           say(F.seen.c5_bulk ? '「HOLD」' : '隔壁が閉ざされている。');
         } }
     });
-    const tick = dt => { if (opening != null) { opening = Math.min(1, opening + dt / 1.2); bulk.plate.position.y = 2.1 * ease(opening); if (opening >= 1) opening = null; } };
+    const tick = dt => { if (opening != null) { opening = Math.min(1, opening + dt / 0.9); hole.visible = true; hole.scale.setScalar(Math.max(0.001, ease(opening))); if (opening >= 1) opening = null; } };
     return { grp: sh.grp, targets, tick };
   },
 
@@ -1141,6 +1183,13 @@ const ROOMS = {
     wbg.computeLineDistances(); placeOn(wbg, 'front', W, D, 0.15, 1.45, 0.03); sh.grp.add(wbg);
     // 扉
     const door = makeDoor(0x000000, 0xffffff); placeOn(door.g, 'right', W, D, 0, 0, 0.004); sh.grp.add(door.g);
+    // 扉の横の壁の張り紙「よるはとおれない」（そのまま読める。調べても読める）
+    const npc = document.createElement('canvas'); npc.width = 512; npc.height = 320;
+    { const g = npc.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 512, 320); g.strokeStyle = '#000'; g.lineWidth = 8; g.strokeRect(14, 14, 484, 292);
+      g.fillStyle = '#000'; g.font = '88px DotGothic16, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('よるは', 256, 112); g.fillText('とおれない', 256, 214); }
+    const note = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.375), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(npc) }));
+    placeOn(note, 'right', W, D, -0.95, 1.35, 0.006); sh.grp.add(note);
+    const notePos = wallPos('right', W, D, -0.95, 1.35);
     if (F.ev.s6_door_open) door.dark.material.opacity = 1;
     const DIARY = { past: '11月15日。大事なものを箱にしまった', present: '12月29日。掃除をした', future: '７月７日。今日は七夕だ' };
     const targets = {
@@ -1160,13 +1209,14 @@ const ROOMS = {
           });
         } },
       box2: { pos: B2.clone(), act: () => true, examine() { say('空の箱だ。'); } },
-      wbtn: { pos: WB, act: () => !!F.ev.s6_pressed && (!!F.seen.s6_wbtn_d || !!F.ev.wbtn_real),
+      wbtn: { pos: WB, act: () => era === 'future' && !!F.ev.s6_pressed && (!!F.seen.s6_wbtn_d || !!F.ev.wbtn_real),
         real: { seen: 's6_wbtn_d', flag: 'wbtn_real', msg: '透明なボタンが、実体になった。' },
         examine() {
           if (!F.ev.wbtn_real) { say('透明な何かがある。'); return; }
           if (!F.ev.clock_on) { F.ev.clock_on = true; quake(0.6); rumble(0.6); say('ボタンを押した。壁に時計がある。'); }
           else say('壁のボタンは押した。');
         } },
+      note: { pos: notePos, act: () => true, examine() { say('「よるはとおれない」'); } },
       door: { pos: V(W, FLOOR + 1.0, 0), act: () => true,
         examine() {
           if (F.ev.s6_door_open) { goRoom('c6'); return; }
@@ -1176,10 +1226,10 @@ const ROOMS = {
     };
     const tick = dt => {
       clock.visible = !!F.ev.clock_on;
-      const glit = !!F.ev.s6_pressed && lit('green', WB);
+      const glit = era === 'future' && !!F.ev.s6_pressed && lit('green', WB);   // 透明なボタンは未来にだけある
       if (glit) F.seen.s6_wbtn_d = true;
       wbg.material.opacity += ((glit && !F.ev.wbtn_real ? 1 : 0) - wbg.material.opacity) * Math.min(1, dt * 8); wbg.visible = wbg.material.opacity > 0.02;
-      wbt.visible = !!F.ev.wbtn_real;
+      wbt.visible = !!F.ev.wbtn_real && era === 'future';
       crateTick(lbox, dt);
       $('night').style.opacity = F.ev.s6_day ? 0 : 1;
     };
@@ -1269,7 +1319,7 @@ const ROOMS = {
       if (F.ev.s7_black_done && !F.ev.s7_wdoor) { wdT += dt; if (wdT >= 15) { F.ev.s7_wdoor = true; wd.visible = true; say('扉が現れた。'); } }
       if (dirty) rebuild();
     };
-    const onEnter = () => { if (!F.ev.s7_closed) { F.ev.s7_closed = true; quake(0.8); rumble(1.0); } };
+    const onEnter = () => { if (!F.ev.s7_closed) { F.ev.s7_closed = true; rumble(1.0); } };
     return { grp: sh.grp, targets, tick, onEnter, blackable: true };
   },
 
@@ -1285,9 +1335,7 @@ const ROOMS = {
       [0, wy - hh, z], [0, wy + hh, z], [-hw, wy, z], [hw, wy, z], [-hw - 0.1, wy - hh - 0.1, z + 0.08], [hw + 0.1, wy - hh - 0.1, z + 0.08]], frameMat);
     sh.grp.add(frame);
     const townG = new THREE.Group(); townBehind(townG, 0, 0.2, -D - 3.2, 9, 4.5); sh.grp.add(townG);
-    // 出入口のふさがった隔壁
-    const bl = makeBulk(1.1, 2.1); placeOn(bl.g, 'left', W, D, 0, 0, 0.012); sh.grp.add(bl.g);
-    const br = makeBulk(1.1, 2.1); placeOn(br.g, 'right', W, D, 0, 0, 0.012); sh.grp.add(br.g);
+    // 出入口：入ったとき、入口も出口も消えて、ただの壁になる（roomShellの壁には扉を置かない）
     // 橋（部屋の真ん中、プレイヤーの前）と、はしご
     const BP = V(0, FLOOR, -1.2);
     const bridge = new THREE.Group(); const arc = [];
@@ -1299,13 +1347,11 @@ const ROOMS = {
     for (let y = 0.3; y < HGT; y += 0.3) ll.push([-0.25, y, 0], [0.25, y, 0]);
     ladder.add(segs(ll)); ladder.position.copy(BP); sh.grp.add(ladder);
     const hole = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.8), new THREE.MeshBasicMaterial({ color: 0x000000 })); hole.rotation.x = Math.PI / 2; hole.position.set(0, CEIL - 0.003, -1.2); sh.grp.add(hole);
-    const brLab = redMark('「はし」', 0.5); brLab.position.copy(BP).add(V(0, 0.95, 0)); sh.grp.add(brLab);
+    const brLab = redMark('「はし」', 0.5); brLab.position.copy(BP).add(V(0, 0.5, 0.36)); sh.grp.add(brLab);
     let t = 0, prevLit = false;
     const targets = {
       window: { pos: V(0, wy, -D), act: () => !F.ev.s8_win_gone, examine() { say('窓の外に、私のいた町が見える。'); } },
-      left: { pos: V(-W, FLOOR + 1.0, 0), act: () => true, examine() { say('入ってきた扉は、ふさがっている。'); } },
-      right: { pos: V(W, FLOOR + 1.0, 0), act: () => true, examine() { say('最初に使った通路は、ふさがっている。'); } },
-      bridge: { pos: BP.clone().add(V(0, 0.4, 0)), act: () => !!F.ev.s8_bridge && !F.ev.s8_ladder, hidden: 's8_bridge', label: brLab,
+      bridge: { pos: BP.clone().add(V(0, 0.5, 0.36)), act: () => !!F.ev.s8_bridge && !F.ev.s8_ladder, hidden: 's8_bridge', label: brLab,
         edit: { text: 'はし', blank: true, goal: 'はしご', flag: 's8_ladder', done() { F.ev.s8_ladder = true; say('上に行けってことなのか？', null, true); } },
         examine() { say(F.seen.s8_bridge ? '「はし」' : '部屋の真ん中に橋がある。'); } },
       ladder: { pos: BP.clone().add(V(0, 1.2, 0)), act: () => !!F.ev.s8_ladder, examine() { say('はしごだ。上に登ってみよう。', () => climb(), true); } }
@@ -1342,17 +1388,17 @@ const ROOMS = {
     const F = G.flags, grp = new THREE.Group();
     const fl = []; for (let i = 0; i < 48; i++) { const a = i / 48 * Math.PI * 2, b = (i + 1) / 48 * Math.PI * 2; fl.push([Math.cos(a) * 1.2, FLOOR, Math.sin(a) * 1.2], [Math.cos(b) * 1.2, FLOOR, Math.sin(b) * 1.2]); }
     grp.add(segs(fl, lineMat(0xe2e2e2)));
+    const NO_POS = [];
+    for (const [y, r, n, off] of [[-0.9, 2.0, 9, 0.3], [-0.2, 1.7, 11, 0], [0.5, 1.9, 10, 0.5], [1.2, 2.2, 8, 0.2], [1.8, 2.6, 6, 0.6]])
+      for (let i = 0; i < n; i++) { const a = (i + off) / n * Math.PI * 2; NO_POS.push([Math.sin(a) * r, y + ((i * 37) % 7 - 3) * 0.04, -Math.cos(a) * r, 0.55 + ((i * 53) % 5) * 0.08]); }
     // 周りを囲む文字（WALL → WILL → 消える）と、そのあと四方八方を囲む NO! → GO!
     const ring = new THREE.Group(); grp.add(ring);
     const words = [];
     const setRing = (txt) => {
       ring.clear(); words.length = 0;
-      for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; const m = textPlane(txt, '#000000', 1.0, { depth: true }); m.position.set(Math.sin(a) * 2.3, 0, -Math.cos(a) * 2.3); m.lookAt(0, 0, 0); ring.add(m); words.push(m); }
+      for (const [x, y, z, w] of NO_POS) { const m = textPlane(txt, '#000000', w * 1.15, { depth: true }); m.position.set(-x, y, z); m.lookAt(0, y, 0); ring.add(m); words.push(m); }   // NO!と同じくらいの数で取り囲む
     };
     const noG = new THREE.Group(); grp.add(noG);
-    const NO_POS = [];
-    for (const [y, r, n, off] of [[-0.9, 2.0, 9, 0.3], [-0.2, 1.7, 11, 0], [0.5, 1.9, 10, 0.5], [1.2, 2.2, 8, 0.2], [1.8, 2.6, 6, 0.6]])
-      for (let i = 0; i < n; i++) { const a = (i + off) / n * Math.PI * 2; NO_POS.push([Math.sin(a) * r, y + ((i * 37) % 7 - 3) * 0.04, -Math.cos(a) * r, 0.55 + ((i * 53) % 5) * 0.08]); }
     let noA = 0;   // NO!の現れ（0→1）
     const setNo = (txt) => {
       noG.clear();
@@ -1817,14 +1863,16 @@ function openManual() {
     { el: $('btnGreen'), text: F.paintGB ? '緑：押す間、緑の光\n色：透明なものを実体に' : '緑：押す間、緑の光', side: 'r', dy: F.paintGB ? -14 : -6 },
     { el: $('btnBlue'), text: F.paintGB ? '青：押す間、周りに青い光\n色：部屋の時間を変える' : '青：押す間、周りに青い光', side: 'r', dy: F.paintGB ? 34 : 26 }
   ];
-  if (F.white || F.ev.blackReady) items.push({ el: $('gb'), text: '赤・緑・青を同時に押し続ける' + (F.white ? '\n光：白い光' : '') + (F.ev.blackReady ? '\n色：黒で塗る' : ''), side: 'r', up: true });
+  // 3つ同時（白・黒）：3-2で白を得る前に操作方法を開くと、「光：白い光」がゆっくり浮かび上がる
+  whitePending = !!(room && room.id === 's8' && F.ev.s8_hint && !F.white);
+  const showWhite = F.white || whitePending, tri = showWhite || F.ev.blackReady;
   const svg = $('mSvg'), labs = $('mLabels'); svg.innerHTML = ''; labs.innerHTML = '';
   const W = innerWidth, H = innerHeight;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   const line = (x1, y1, x2, y2) => { const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     ln.setAttribute('x1', x1); ln.setAttribute('y1', y1); ln.setAttribute('x2', x2); ln.setAttribute('y2', y2); ln.setAttribute('stroke', '#fff'); ln.setAttribute('stroke-width', '2'); svg.appendChild(ln); };
   const mk = text => { const lab = document.createElement('div'); lab.className = 'lab'; lab.textContent = text; labs.appendChild(lab); return lab; };
-  const LEFT = [$('btnMode'), $('btnGreen'), $('btnBlue'), $('gb')], RIGHT = [$('btnLook'), $('btnRed')];
+  const LEFT = [$('btnMode'), $('btnGreen'), $('btnBlue')], RIGHT = [$('btnLook'), $('btnRed')];
   // 左手側（光⇄色・緑・青・3つ同時）：左のボタンの右に、下から順に積む
   const lefts = items.filter(it => LEFT.includes(it.el) && !it.el.hidden);
   const padR0 = $('padL').getBoundingClientRect();
@@ -1834,7 +1882,7 @@ function openManual() {
     y -= lh + 8; const lx = padR0.right + 36;
     lab.style.left = lx + 'px'; lab.style.top = y + 'px';
     const r = it.el.getBoundingClientRect();
-    line(it.el === $('gb') ? r.left + r.width / 2 : r.right, it.el === $('gb') ? r.top : r.top + r.height / 2, lx, y + lh / 2);
+    line(r.right, r.top + r.height / 2, lx, y + lh / 2);
   }
   // 右手側（調べる・赤）：右のボタンの左に、下から順に積む
   const rights = items.filter(it => RIGHT.includes(it.el) && !it.el.hidden);
@@ -1845,6 +1893,27 @@ function openManual() {
     y -= lh + 8; const lx = padRR.left - 36 - lw;
     lab.style.left = lx + 'px'; lab.style.top = y + 'px';
     const r = it.el.getBoundingClientRect(); line(r.left, r.top + r.height / 2, lx + lw, y + lh / 2);
+  }
+  // 3つ同時：真ん中（左右の札より上）に置き、赤・緑・青の3つへ線をのばす
+  if (tri) {
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g'); svg.appendChild(g);
+    const lab = document.createElement('div'); lab.className = 'lab';
+    const onlyWhite = whitePending && !F.ev.blackReady;
+    lab.innerHTML = '赤・緑・青を同時に押し続ける' + (showWhite ? `<span class="${whitePending ? 'wfade' : ''}">\n光：白い光</span>` : '') + (F.ev.blackReady ? '\n色：黒で塗る' : '');
+    labs.appendChild(lab);
+    const lw = lab.offsetWidth, lh = lab.offsetHeight;
+    const tops = [...labs.children].filter(l => l !== lab).map(l => l.getBoundingClientRect().top);
+    const rc = $('reticle').getBoundingClientRect();
+    const ly = Math.max(rc.bottom + 24, Math.min(...tops, H - 20) - lh - 18), lx = (W - lw) / 2;
+    lab.style.left = lx + 'px'; lab.style.top = ly + 'px';
+    for (const id of ['btnGreen', 'btnBlue', 'btnRed']) {
+      const r = $(id).getBoundingClientRect(), ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      const sx = id === 'btnRed' ? lx + lw - 14 : lx + 14;
+      ln.setAttribute('x1', sx); ln.setAttribute('y1', ly + lh); ln.setAttribute('x2', r.left + r.width / 2); ln.setAttribute('y2', r.top);
+      ln.setAttribute('stroke', '#fff'); ln.setAttribute('stroke-width', '2'); ln.setAttribute('stroke-dasharray', '5 4'); g.appendChild(ln);
+    }
+    if (onlyWhite) { lab.classList.add('wfade'); g.setAttribute('class', 'wfade'); }
+    if (whitePending) requestAnimationFrame(() => requestAnimationFrame(() => document.querySelectorAll('#manual .wfade').forEach(e => e.classList.add('show'))));
   }
   // 上の角と、見回す（左右に積んだ札とは重ならないように置く）
   const placed = [...labs.children].map(l => { const b = l.getBoundingClientRect(); return { l: b.left, r: b.right, t: b.top, b: b.bottom }; });
@@ -1861,12 +1930,6 @@ function openManual() {
       if (hit(ly) || ly < 60) { ly = cy + 50; line(cx, r.bottom, cx, ly); } else line(cx, r.top, cx, ly + lh);
     }
     lab.style.left = lx + 'px'; lab.style.top = ly + 'px';
-  }
-  if (room && room.id === 's8' && F.ev.s8_hint && !F.white) {
-    whitePending = true;
-    const r = $('padL').getBoundingClientRect(), wb = document.createElement('div'); wb.className = 'whiteBtn';
-    wb.style.left = (r.left + 4) + 'px'; wb.style.top = (r.top - 96) + 'px'; labs.appendChild(wb);
-    setTimeout(() => wb.classList.add('show'), 300);
   }
 }
 let whitePending = false;
