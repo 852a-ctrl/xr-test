@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>
+<title>Colors 白い部屋</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
+<style>
+/* 白黒線画の部屋の中心に立つ。文字はColorsと同じドットの書体、セリフは黒い枠に白い文字。 */
+:root{
+  --paper:#ffffff; --ink:#000000; --muted:#7a7a7a; --veil:rgba(255,255,255,.92);
+  --font:'DotGothic16','Hiragino Kaku Gothic ProN','Meiryo',sans-serif;
+  color-scheme:light;
+}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;overflow:hidden;background:var(--paper);color:var(--ink);font-family:var(--font);
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#reticle{position:fixed;left:50%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%);border:2px solid var(--ink);border-radius:50%;
+  pointer-events:none;opacity:.55;transition:width .15s,height .15s,opacity .15s}
+#reticle.on{width:30px;height:30px;opacity:1}
+#controls{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;gap:12px;
+  padding-bottom:calc(16px + env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+button{font-family:var(--font);font-size:18px;background:var(--paper);color:var(--ink);border:3px solid var(--ink);padding:12px 22px;min-width:110px;cursor:pointer}
+button:focus-visible{outline:3px solid var(--muted);outline-offset:2px}
+button:disabled{color:#bbb;border-color:#bbb;cursor:default}
+#btnFront{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:max(12px,env(safe-area-inset-right,0px));
+  font-size:12px;padding:5px 9px;min-width:0;border-width:2px;opacity:.7}
+/* セリフ：Colorsと同じ、黒い枠に白い文字 */
+#dialog{position:fixed;left:0;right:0;bottom:0;padding-bottom:calc(16px + env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;justify-content:center}
+#dialog .box{width:100%;max-width:640px;background:var(--ink);color:var(--paper);border:3px solid var(--paper);outline:3px solid var(--ink);
+  padding:16px 20px 26px;font-size:20px;line-height:1.7;min-height:3.4em;position:relative;cursor:pointer}
+#dialog .more{position:absolute;right:14px;bottom:6px;font-size:13px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+/* 黒い画面（プロローグ・終わり） */
+#black{position:fixed;inset:0;background:var(--ink);color:var(--paper);display:flex;align-items:center;justify-content:center;
+  opacity:1;transition:opacity 1.6s;padding-block:24px;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px));cursor:pointer}
+#black.clear{opacity:0;pointer-events:none}
+#black p{font-size:22px;line-height:1.8;max-width:26em;margin:0;min-height:3.6em}
+#start{position:fixed;inset:0;background:var(--ink);color:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;
+  padding-block:24px;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px))}
+#start h1{font-weight:400;font-size:44px;letter-spacing:.25em;margin:0}
+#start button{background:var(--ink);color:var(--paper);border-color:var(--paper)}
+#start .note{font-size:12px;color:#9a9a9a;max-width:28em;line-height:1.7;text-align:center;margin:0}
+@media (prefers-reduced-motion:reduce){#black{transition:none}#dialog .more{animation:none}}
+</style>
+
+<canvas id="gl"></canvas>
+<div id="reticle"></div>
+<button id="btnFront">正面を合わせる</button>
+<div id="controls"><button id="btnLook" disabled>調べる</button></div>
+<div id="dialog" hidden><div class="box" id="dbox"><span id="dtext"></span><span class="more" id="dmore">▼</span></div></div>
+<div id="black"><p id="btext"></p></div>
+<div id="start">
+  <h1>Colors</h1>
+  <button id="btnStart" disabled>読み込み中…</button>
+  <p class="note">その場に立ったまま、端末を持って見回す。中央の丸を合わせて「調べる」。<br>傾きのセンサーがない端末では、指でなぞって見回す。<br>パソコンでは、矢印キーで見回し、Eキーで調べる・進める。</p>
+  <p class="note" id="err"></p>
+</div>
+
+<script>
+window.__err = function (m) { var e = document.getElementById('err'); if (e) e.textContent += ' ' + m; };
+window.addEventListener('error', function (ev) { window.__err('エラー：' + (ev.message || '不明')); });
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+(function () {
+const $ = id => document.getElementById(id);
+if (typeof THREE === 'undefined') { window.__err('3D表示の部品を読み込めませんでした。'); return; }
+const D2R = Math.PI / 180;
+
+/* ================= 部屋 ================= */
+// 5m四方、天井2.6m。目の高さを0として、床は-1.4。プレイヤーは真ん中に立つ。
+const R = 2.5, FLOOR = -1.4, CEIL = 1.2;
+const renderer = new THREE.WebGLRenderer({ canvas: $('gl'), antialias: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+renderer.setClearColor(0xffffff, 1);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(62, 1, 0.05, 100);
+scene.add(camera);
+
+const INK = new THREE.LineBasicMaterial({ color: 0x000000 });
+const FAINT = new THREE.LineBasicMaterial({ color: 0xd2d2d2 });
+const WHITE = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+function lines(pts, mat) {   // [[x,y,z],[x,y,z]] の組を線にする
+  const g = new THREE.BufferGeometry().setFromPoints(pts.map(p => new THREE.Vector3(p[0], p[1], p[2])));
+  return new THREE.LineSegments(g, mat || INK);
+}
+function loop(pts) { const o = []; for (let i = 0; i < pts.length; i++) o.push(pts[i], pts[(i + 1) % pts.length]); return o; }
+
+const room = new THREE.Group(); scene.add(room);
+// 部屋の角の線
+const c = [[-R, -R], [R, -R], [R, R], [-R, R]];
+const edges = [];
+for (let i = 0; i < 4; i++) {
+  const [x0, z0] = c[i], [x1, z1] = c[(i + 1) % 4];
+  edges.push([x0, FLOOR, z0], [x1, FLOOR, z1], [x0, CEIL, z0], [x1, CEIL, z1], [x0, FLOOR, z0], [x0, CEIL, z0]);
+}
+room.add(lines(edges));
+// 床のマス目（Colorsのマスと同じ感じを、うすく）
+const grid = [];
+for (let i = -R + 0.5; i < R; i += 0.5) { grid.push([i, FLOOR, -R], [i, FLOOR, R], [-R, FLOOR, i], [R, FLOOR, i]); }
+room.add(lines(grid, FAINT));
+
+// 壁：前の壁（-z）には窓の穴があく。白い面で、外の町が見えるのは窓からだけにする
+const WIN = { w: 1.5, h: 0.95, y: 0.15 };
+function wallWithHole(z, rotY, hole) {
+  const g = new THREE.Group();
+  const W = R * 2, H = CEIL - FLOOR, cy = (CEIL + FLOOR) / 2;
+  const add = (w, h, x, y) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), WHITE); m.position.set(x, y, 0); g.add(m); };
+  if (!hole) add(W, H, 0, cy);
+  else {
+    const top = WIN.y + hole.h / 2, bot = WIN.y - hole.h / 2;
+    add(W, CEIL - top, 0, (CEIL + top) / 2);
+    add(W, bot - FLOOR, 0, (bot + FLOOR) / 2);
+    add((W - hole.w) / 2, hole.h, -(W + hole.w) / 4, WIN.y);
+    add((W - hole.w) / 2, hole.h, (W + hole.w) / 4, WIN.y);
+  }
+  g.rotation.y = rotY; g.position.z = 0;
+  const pivot = new THREE.Group(); g.position.set(0, 0, z); pivot.add(g); return pivot;
+}
+const front = wallWithHole(-R, 0, WIN); room.add(front);
+const backW = wallWithHole(-R, 0, null); backW.rotation.y = Math.PI; room.add(backW);
+const leftW = wallWithHole(-R, 0, null); leftW.rotation.y = Math.PI / 2; room.add(leftW);
+const rightW = wallWithHole(-R, 0, null); rightW.rotation.y = -Math.PI / 2; room.add(rightW);
+const floorM = new THREE.Mesh(new THREE.PlaneGeometry(R * 2, R * 2), WHITE); floorM.rotation.x = -Math.PI / 2; floorM.position.y = FLOOR; room.add(floorM);
+const ceilM = new THREE.Mesh(new THREE.PlaneGeometry(R * 2, R * 2), WHITE); ceilM.rotation.x = Math.PI / 2; ceilM.position.y = CEIL; room.add(ceilM);
+
+// 窓の枠（二重線と十字の桟）
+const wz = -R + 0.002, hw = WIN.w / 2, hh = WIN.h / 2, wy = WIN.y;
+const wf = [];
+const rectL = (x0, y0, x1, y1, z) => loop([[x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z]]);
+wf.push(...rectL(-hw, wy - hh, hw, wy + hh, wz), ...rectL(-hw - 0.06, wy - hh - 0.06, hw + 0.06, wy + hh + 0.06, wz));
+wf.push([0, wy - hh, wz], [0, wy + hh, wz], [-hw, wy, wz], [hw, wy, wz]);
+wf.push([-hw - 0.1, wy - hh - 0.1, wz + 0.08], [hw + 0.1, wy - hh - 0.1, wz + 0.08]);   // 窓台
+const windowObj = lines(wf); room.add(windowObj);
+
+// 窓の外：私のいた町（白黒の線画）。窓より奥に置いて、のぞくと少し奥行きが出るようにする
+function townTexture() {
+  const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 512;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, 1024, 512);
+  g.strokeStyle = '#000'; g.lineWidth = 3; g.fillStyle = '#fff';
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  // 遠くの建物
+  for (let x = -20; x < 1040;) {
+    const w = 50 + rnd() * 70, h = 120 + rnd() * 200;
+    g.strokeStyle = '#9a9a9a'; g.lineWidth = 2; g.strokeRect(x, 470 - h, w, h); x += w + 6;
+  }
+  // 近くの建物と窓
+  for (let x = -10; x < 1040;) {
+    const w = 80 + rnd() * 110, h = 90 + rnd() * 170;
+    g.fillStyle = '#fff'; g.fillRect(x, 500 - h, w, h);
+    g.strokeStyle = '#000'; g.lineWidth = 3; g.strokeRect(x, 500 - h, w, h);
+    g.lineWidth = 2;
+    for (let yy = 500 - h + 16; yy < 470; yy += 30) for (let xx = x + 12; xx < x + w - 22; xx += 26) g.strokeRect(xx, yy, 12, 14);
+    x += w + 14 + rnd() * 30;
+  }
+  // 電柱と電線
+  g.lineWidth = 3; g.beginPath(); g.moveTo(170, 512); g.lineTo(170, 230); g.moveTo(820, 512); g.lineTo(820, 210); g.stroke();
+  g.lineWidth = 1.5; g.beginPath(); g.moveTo(0, 260); g.quadraticCurveTo(170, 300, 170, 240); g.quadraticCurveTo(495, 300, 820, 220); g.quadraticCurveTo(930, 260, 1024, 250); g.stroke();
+  const t = new THREE.CanvasTexture(cv); t.anisotropy = 4; return t;
+}
+const town = new THREE.Mesh(new THREE.PlaneGeometry(9, 4.5), new THREE.MeshBasicMaterial({ map: townTexture() }));
+town.position.set(0, 0.2, -R - 3.2); room.add(town);
+const sky = new THREE.Mesh(new THREE.PlaneGeometry(30, 20), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+sky.position.set(0, 0, -R - 3.3); room.add(sky);
+
+// 右の壁（+x）に現れる扉。線が下から順に描かれていく
+const DOOR = { w: 1.0, h: 2.0 };
+const dx = R - 0.002, dyB = FLOOR, dyT = FLOOR + DOOR.h;
+const doorPts = [
+  [dx, dyB, -0.5], [dx, dyT, -0.5], [dx, dyT, -0.5], [dx, dyT, 0.5], [dx, dyT, 0.5], [dx, dyB, 0.5],
+  [dx, dyB + 0.06, -0.42], [dx, dyT - 0.08, -0.42], [dx, dyT - 0.08, -0.42], [dx, dyT - 0.08, 0.42], [dx, dyT - 0.08, 0.42], [dx, dyB + 0.06, 0.42],
+  [dx, -0.45, 0.3], [dx, -0.45, 0.36], [dx, -0.45, 0.36], [dx, -0.38, 0.36]   // 取っ手
+];
+const doorGeo = new THREE.BufferGeometry().setFromPoints(doorPts.map(p => new THREE.Vector3(p[0], p[1], p[2])));
+doorGeo.setDrawRange(0, 0);
+const doorObj = new THREE.LineSegments(doorGeo, INK); room.add(doorObj);
+const doorDark = new THREE.Mesh(new THREE.PlaneGeometry(DOOR.w - 0.02, DOOR.h - 0.02), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0 }));
+doorDark.rotation.y = -Math.PI / 2; doorDark.position.set(R - 0.004, FLOOR + DOOR.h / 2, 0); room.add(doorDark);
+
+/* ================= 調べられるもの ================= */
+const targets = {
+  window: { dir: new THREE.Vector3(0, WIN.y, -R).normalize(), active: () => true },
+  door: { dir: new THREE.Vector3(R, FLOOR + 1.0, 0).normalize(), active: () => F.doorShown }
+};
+const F = { doorShown: false, doorOpen: false, ended: false };
+
+/* ================= 向き（ジャイロ／ドラッグ） ================= */
+let mode = 'drag', ori = null, gotGyro = false, yawOffset = 0, needCalib = true, dragYaw = 0, dragPitch = 0;
+const euler = new THREE.Euler(), zee = new THREE.Vector3(0, 0, 1), yee = new THREE.Vector3(0, 1, 0);
+const q0 = new THREE.Quaternion(), q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)), qY = new THREE.Quaternion();
+window.addEventListener('deviceorientation', e => { if (e.alpha == null && e.beta == null) return; ori = { a: e.alpha || 0, b: e.beta || 0, g: e.gamma || 0 }; gotGyro = true; });
+const screenAngle = () => (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (window.orientation || 0);
+function gyroQuat(out, off) {
+  euler.set(ori.b * D2R, ori.a * D2R, -ori.g * D2R, 'YXZ');
+  out.setFromEuler(euler); out.multiply(q1); out.multiply(q0.setFromAxisAngle(zee, -screenAngle() * D2R));
+  if (off) out.premultiply(qY.setFromAxisAngle(yee, yawOffset));
+  return out;
+}
+function calibrate() {   // いま向いている方向を、窓のある壁にする
+  if (mode === 'gyro' && ori) {
+    const f = new THREE.Vector3(0, 0, -1).applyQuaternion(gyroQuat(new THREE.Quaternion(), false));
+    yawOffset = Math.atan2(f.x, -f.z);
+  } else { dragYaw = 0; dragPitch = 0; }
+}
+$('btnFront').addEventListener('click', calibrate);
+const pts = new Map();
+const cv = $('gl');
+cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); });
+cv.addEventListener('pointermove', e => {
+  const p = pts.get(e.pointerId); if (!p) return;
+  const ddx = e.clientX - p[0], ddy = e.clientY - p[1]; pts.set(e.pointerId, [e.clientX, e.clientY]);
+  if (mode === 'drag' && pts.size === 1) { dragYaw += ddx * 0.005; dragPitch = Math.max(-1.3, Math.min(1.3, dragPitch + ddy * 0.005)); }
+});
+['pointerup', 'pointercancel'].forEach(n => cv.addEventListener(n, e => pts.delete(e.pointerId)));
+const keys = new Set();
+window.addEventListener('keydown', e => {
+  if (e.repeat) return; keys.add(e.code);
+  if (e.code === 'KeyE' || e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); decide(); }
+});
+window.addEventListener('keyup', e => keys.delete(e.code));
+window.addEventListener('blur', () => keys.clear());
+
+/* ================= 音（Colorsの導入と同じ、低いノイズ） ================= */
+let ac = null;
+function audio() { if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (ac && ac.state === 'suspended') ac.resume(); return ac; }
+function rumble(dur) {
+  const a = audio(); if (!a) return;
+  const t = a.currentTime, buf = a.createBuffer(1, Math.floor(a.sampleRate * dur), a.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  const src = a.createBufferSource(); src.buffer = buf;
+  const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(600, t); lp.frequency.exponentialRampToValueAtTime(60, t + dur);
+  const osc = a.createOscillator(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(48, t); osc.frequency.exponentialRampToValueAtTime(26, t + dur);
+  const g = a.createGain(); g.gain.setValueAtTime(0.4, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(lp); osc.connect(lp); lp.connect(g); g.connect(a.destination); src.start(t); osc.start(t); osc.stop(t + dur);
+}
+
+/* ================= セリフ ================= */
+let dlg = null;   // { lines, i, c, cb }
+function say(lines, cb) { dlg = { lines: [].concat(lines), i: 0, c: 0, cb }; $('dialog').hidden = false; $('controls').hidden = true; }
+function dialogAdvance() {
+  const l = dlg.lines[dlg.i];
+  if (dlg.c < l.length) { dlg.c = l.length; return; }
+  dlg.i++; dlg.c = 0;
+  if (dlg.i >= dlg.lines.length) { const cb = dlg.cb; dlg = null; $('dialog').hidden = true; $('controls').hidden = false; if (cb) cb(); }
+}
+$('dbox').addEventListener('click', () => dialogAdvance());
+
+/* ================= プロローグ（Colorsと同じ文） ================= */
+const PROLOGUE = [
+  '意識を失っていたようだ',
+  '学校が終わりいつも通り、何気ない毎日を過ごしていたような気がする',
+  '周りからは良い子に見られているが',
+  'そろそろ良い子を演じるのも疲れてきた',
+  '期待に応える中で、自分が消えていく感覚',
+  'そんな事を考えていると、路地裏から何か声が聞こえた気がした',
+  '気になって路地裏に入ったと思う',
+  'その後のことは覚えていない'
+];
+let pro = null;   // { i, c } プロローグ中だけ
+function proAdvance() {
+  const l = PROLOGUE[pro.i];
+  if (pro.c < l.length) { pro.c = l.length; return; }
+  pro.i++; pro.c = 0;
+  if (pro.i >= PROLOGUE.length) {
+    pro = null; $('btext').textContent = ''; rumble(1.8);
+    setTimeout(() => { needCalib = true; $('black').classList.add('clear'); }, 1400);
+  }
+}
+$('black').addEventListener('click', () => { if (pro) proAdvance(); else if (F.ended) location.reload(); });
+
+/* ================= 調べる ================= */
+let aimed = null;
+function look() {
+  if (aimed === 'window') {
+    say('私のいた町だ。どうにかして脱出したい。', () => {
+      if (F.doorShown) return;
+      F.doorShown = true; rumble(1.4); quake = 1.2; doorDraw = 0;
+    });
+  } else if (aimed === 'door') {
+    if (!F.doorOpen) { F.doorOpen = true; doorOpenT = 0; }
+  }
+}
+$('btnLook').addEventListener('click', look);
+function decide() {
+  if (pro) return proAdvance();
+  if (F.ended) return;
+  if (dlg) return dialogAdvance();
+  if (!$('btnLook').disabled) look();
+}
+
+/* ================= 開始 ================= */
+$('btnStart').addEventListener('click', async () => {
+  audio();
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function')
+      await Promise.race([DeviceOrientationEvent.requestPermission(), new Promise(r => setTimeout(r, 8000))]);
+  } catch (e) {}
+  $('start').hidden = true;
+  pro = { i: 0, c: 0 };
+  setTimeout(() => { if (gotGyro) mode = 'gyro'; }, 600);
+});
+
+/* ================= 毎フレーム ================= */
+const fwd = new THREE.Vector3();
+let last = performance.now(), quake = 0, doorDraw = -1, doorOpenT = -1;
+function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize);
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  // 向き
+  if (!gotGyro || mode !== 'gyro') {
+    if (keys.has('ArrowLeft')) dragYaw += dt * 1.6;
+    if (keys.has('ArrowRight')) dragYaw -= dt * 1.6;
+    if (keys.has('ArrowUp')) dragPitch = Math.min(1.3, dragPitch + dt * 1.2);
+    if (keys.has('ArrowDown')) dragPitch = Math.max(-1.3, dragPitch - dt * 1.2);
+    euler.set(dragPitch, dragYaw, 0, 'YXZ'); camera.quaternion.setFromEuler(euler);
+  } else if (ori) {
+    if (needCalib) { needCalib = false; calibrate(); }
+    gyroQuat(camera.quaternion, true);
+  }
+  // 揺れ：カメラは動かさず、部屋の線だけを細かく震わせる（酔いにくくするため）
+  if (quake > 0) { quake -= dt; const k = Math.max(0, quake) * 0.025; room.position.set((Math.random() - .5) * k, (Math.random() - .5) * k, (Math.random() - .5) * k); }
+  else room.position.set(0, 0, 0);
+  // 扉が描かれていく（揺れが終わるころから）
+  if (doorDraw >= 0 && quake < 0.4) { doorDraw = Math.min(doorPts.length, doorDraw + dt * 9); doorGeo.setDrawRange(0, Math.floor(doorDraw / 2) * 2); }
+  // 扉が開く → 暗くなって終わり
+  if (doorOpenT >= 0) {
+    doorOpenT += dt; doorDark.material.opacity = Math.min(1, doorOpenT / 0.8);
+    if (doorOpenT > 1.6 && !F.ended) {
+      F.ended = true; $('controls').hidden = true;
+      $('btext').textContent = 'つづく'; $('black').classList.remove('clear');
+    }
+  }
+  // 中央の丸に何が入っているか
+  fwd.set(0, 0, -1).applyQuaternion(camera.quaternion);
+  aimed = null;
+  if (!pro && !dlg && !F.ended && doorOpenT < 0) {
+    for (const k in targets) { const t = targets[k]; if (t.active() && fwd.angleTo(t.dir) < 0.24) { aimed = k; break; } }
+    if (aimed === 'door' && doorDraw < doorPts.length) aimed = null;
+  }
+  $('btnLook').disabled = !aimed; $('reticle').classList.toggle('on', !!aimed);
+  // 文字が順に出る
+  if (pro) { pro.c = Math.min(PROLOGUE[pro.i].length, pro.c + dt * 14); $('btext').textContent = PROLOGUE[pro.i].slice(0, Math.floor(pro.c)); }
+  if (dlg) { dlg.c = Math.min(dlg.lines[dlg.i].length, dlg.c + dt * 18); $('dtext').textContent = dlg.lines[dlg.i].slice(0, Math.floor(dlg.c)); $('dmore').hidden = dlg.c < dlg.lines[dlg.i].length; }
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+Promise.race([document.fonts && document.fonts.load ? document.fonts.load('20px DotGothic16') : Promise.resolve(), new Promise(r => setTimeout(r, 3000))])
+  .catch(() => {}).then(() => {
+    resize(); requestAnimationFrame(frame);
+    const b = $('btnStart'); b.disabled = false; b.textContent = 'はじめる';
+  });
+})();
+</script>
+
+</body></html>
