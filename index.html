@@ -1,5 +1,7 @@
 <!doctype html>
-<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Colors">
+</head><body>
 <title>Colors AR</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
 <style>
@@ -152,6 +154,65 @@ body.edPads #editor .panel{margin:0 auto}
 #manual .wfade.show{opacity:1}
 #btext .title{font-size:64px;letter-spacing:.06em}
 #btext .title .s{transition:opacity 3s}
+/* 画面の大きさに合わせる：スマートフォンの横持ち（高さが低い） */
+@media (max-height:500px){
+  .pad{gap:6px;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px))}
+  .btn{width:78px;height:50px;font-size:15px;border-width:2px}
+  .col{width:64px;height:54px}
+  #btnMode{font-size:14px}
+  .corner{top:calc(6px + env(safe-area-inset-top,0px));gap:4px}
+  .small{font-size:12px;padding:4px 9px}
+  #era{font-size:11px;padding:2px 6px}
+  #dbox{max-width:560px;font-size:16px;padding:10px 16px 18px;line-height:1.6}
+  #dialog{padding-bottom:calc(8px + env(safe-area-inset-bottom,0px))}
+  #btext{font-size:18px}
+  #title{gap:18px}
+  #title h1{font-size:clamp(44px,10vw,80px)}
+  #title .list{gap:8px}
+  .sheet{padding-block:8px}
+  .panel{padding:12px;gap:8px}
+  .panel button{font-size:15px;padding:6px 12px}
+  #editor .panel{max-height:96vh;gap:6px}
+  #edWord button{font-size:20px;min-width:34px;padding:2px 4px}
+  #edTabs button{font-size:12px;padding:3px 8px}
+  #edGrid{gap:3px}
+  #edGrid button{font-size:14px;padding:3px 0}
+  #editor .row button{min-width:90px;padding:5px 10px}
+  .digit .v{font-size:32px;width:50px;height:54px}
+  .digit button{width:50px;padding:3px 0}
+  #manual .lab{font-size:12px;max-width:220px;padding:2px 6px}
+  #manual .close{font-size:14px;padding:5px 16px;top:calc(6px + env(safe-area-inset-top,0px))}
+  #btext .title{font-size:48px}
+}
+/* スマートフォンの縦持ち（幅がせまい） */
+@media (max-width:600px){
+  .pad{gap:6px;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}
+  #padL{padding-left:max(8px,env(safe-area-inset-left,0px))}
+  #padR{padding-right:max(8px,env(safe-area-inset-right,0px))}
+  .btn{width:80px;height:54px;font-size:15px;border-width:2px}
+  .col{width:64px;height:58px}
+  #gb{gap:4px}
+  #btnMode{font-size:14px}
+  .small{font-size:12px;padding:5px 9px}
+  #dbox{font-size:16px;padding:12px 14px 20px;line-height:1.6}
+  #dialog{padding-left:max(10px,env(safe-area-inset-left,0px));padding-right:max(10px,env(safe-area-inset-right,0px))}
+  #btext{font-size:18px}
+  .sheet{padding-left:max(8px,env(safe-area-inset-left,0px));padding-right:max(8px,env(safe-area-inset-right,0px))}
+  .panel{padding:12px;min-width:0}
+  .panel button{font-size:16px;padding:8px 12px}
+  #editor .panel{gap:8px}
+  #edWord button{font-size:22px;min-width:34px}
+  #edTabs button{font-size:12px;padding:4px 7px}
+  #edGrid{gap:3px}
+  #edGrid button{font-size:15px;padding:5px 0}
+  #editor .row button{min-width:90px}
+  .digit .v{font-size:36px;width:54px;height:60px}
+  .digit button{width:54px}
+  #manual .lab{font-size:12px;max-width:230px;padding:2px 6px}
+  #btext .title{font-size:48px}
+}
+/* 縦持ちで書き換え画面の下に本物のボタンを出すとき：画面は上に寄せる */
+body.portrait.edPads #editor{align-items:flex-start}
 @media (prefers-reduced-motion:reduce){#arrow,.blink3,.btn.appear{animation:none}#black,#light{transition:none}}
 </style>
 
@@ -183,6 +244,7 @@ body.edPads #editor .panel{margin:0 auto}
   <button id="mSave">途中セーブして中断</button>
   <button id="mManual">操作方法</button>
   <button id="mLook">見回し方：端末を動かす</button>
+  <button id="mFull">全画面：オン</button>
   <button id="mLog">話を振り返る</button>
 </div></div>
 
@@ -1699,7 +1761,11 @@ function refreshUI() {
   $('padBack').hidden = !hold || !!dlg;
   if (edp) { $('btnLook').hidden = true; }
   document.body.classList.toggle('edPads', edp);
-  if (edp) { const w = Math.max($('padL').offsetWidth, $('padR').offsetWidth); $('editorPanel').style.maxWidth = `calc(100vw - ${2 * w + 12}px)`; } else $('editorPanel').style.maxWidth = '';
+  const ep = $('editorPanel');
+  if (edp && innerHeight > innerWidth) {   // 縦持ち：書き換え画面は上、本物のボタンは下
+    const h = Math.max($('padL').offsetHeight, $('padR').offsetHeight); ep.style.maxWidth = ''; ep.style.maxHeight = `${innerHeight - h - 20}px`;
+  } else if (edp) { const w = Math.max($('padL').offsetWidth, $('padR').offsetWidth); ep.style.maxWidth = `calc(100vw - ${2 * w + 12}px)`; ep.style.maxHeight = ''; }
+  else { ep.style.maxWidth = ''; ep.style.maxHeight = ''; }
   $('tl').hidden = $('tr').hidden = !playing;
   $('reticle').hidden = !playing || !!insp;
   // 時代の表示（時代が変わる部屋だけ）
@@ -1873,26 +1939,36 @@ function openManual() {
     ln.setAttribute('x1', x1); ln.setAttribute('y1', y1); ln.setAttribute('x2', x2); ln.setAttribute('y2', y2); ln.setAttribute('stroke', '#fff'); ln.setAttribute('stroke-width', '2'); svg.appendChild(ln); };
   const mk = text => { const lab = document.createElement('div'); lab.className = 'lab'; lab.textContent = text; labs.appendChild(lab); return lab; };
   const LEFT = [$('btnMode'), $('btnGreen'), $('btnBlue')], RIGHT = [$('btnLook'), $('btnRed')];
-  // 左手側（光⇄色・緑・青・3つ同時）：左のボタンの右に、下から順に積む
-  const lefts = items.filter(it => LEFT.includes(it.el) && !it.el.hidden);
-  const padR0 = $('padL').getBoundingClientRect();
-  let y = padR0.bottom - 4;
-  for (const it of lefts.slice().reverse()) {
-    const lab = mk(it.text), lw = lab.offsetWidth, lh = lab.offsetHeight;
-    y -= lh + 8; const lx = padR0.right + 36;
-    lab.style.left = lx + 'px'; lab.style.top = y + 'px';
-    const r = it.el.getBoundingClientRect();
-    line(r.right, r.top + r.height / 2, lx, y + lh / 2);
-  }
-  // 右手側（調べる・赤）：右のボタンの左に、下から順に積む
-  const rights = items.filter(it => RIGHT.includes(it.el) && !it.el.hidden);
-  const padRR = $('padR').getBoundingClientRect();
-  y = padRR.bottom - 4;
-  for (const it of rights.slice().reverse()) {
-    const lab = mk(it.text), lw = lab.offsetWidth, lh = lab.offsetHeight;
-    y -= lh + 8; const lx = padRR.left - 36 - lw;
-    lab.style.left = lx + 'px'; lab.style.top = y + 'px';
-    const r = it.el.getBoundingClientRect(); line(r.left, r.top + r.height / 2, lx + lw, y + lh / 2);
+  const lefts = items.filter(it => LEFT.includes(it.el) && !it.el.hidden), rights = items.filter(it => RIGHT.includes(it.el) && !it.el.hidden);
+  const padR0 = $('padL').getBoundingClientRect(), padRR = $('padR').getBoundingClientRect();
+  if (innerHeight > innerWidth) {
+    // 縦持ち：ボタンの上に、真ん中ぞろえで1列に積む（左のボタンは札の左へ、右のボタンは札の右へ線）
+    let y = Math.min(padR0.top, padRR.top) - 10;
+    for (const it of [...lefts, ...rights].reverse()) {
+      const lab = mk(it.text), lw = lab.offsetWidth, lh = lab.offsetHeight;
+      y -= lh + 6; const lx = (W - lw) / 2;
+      lab.style.left = lx + 'px'; lab.style.top = y + 'px';
+      const r = it.el.getBoundingClientRect(), isL = LEFT.includes(it.el);
+      line(r.left + r.width / 2, r.top, isL ? lx : lx + lw, y + lh / 2);
+    }
+  } else {
+    // 左手側（光⇄色・緑・青・3つ同時）：左のボタンの右に、下から順に積む
+    let y = padR0.bottom - 4;
+    for (const it of lefts.slice().reverse()) {
+      const lab = mk(it.text), lw = lab.offsetWidth, lh = lab.offsetHeight;
+      y -= lh + 8; const lx = padR0.right + 36;
+      lab.style.left = lx + 'px'; lab.style.top = y + 'px';
+      const r = it.el.getBoundingClientRect();
+      line(r.right, r.top + r.height / 2, lx, y + lh / 2);
+    }
+    // 右手側（調べる・赤）：右のボタンの左に、下から順に積む
+    y = padRR.bottom - 4;
+    for (const it of rights.slice().reverse()) {
+      const lab = mk(it.text), lw = lab.offsetWidth, lh = lab.offsetHeight;
+      y -= lh + 8; const lx = padRR.left - 36 - lw;
+      lab.style.left = lx + 'px'; lab.style.top = y + 'px';
+      const r = it.el.getBoundingClientRect(); line(r.left, r.top + r.height / 2, lx + lw, y + lh / 2);
+    }
   }
   // 3つ同時：真ん中（左右の札より上）に置き、赤・緑・青の3つへ線をのばす
   if (tri) {
@@ -1904,7 +1980,7 @@ function openManual() {
     const lw = lab.offsetWidth, lh = lab.offsetHeight;
     const tops = [...labs.children].filter(l => l !== lab).map(l => l.getBoundingClientRect().top);
     const rc = $('reticle').getBoundingClientRect();
-    const ly = Math.max(rc.bottom + 24, Math.min(...tops, H - 20) - lh - 18), lx = (W - lw) / 2;
+    const ly = innerHeight > innerWidth ? Math.min(...tops, H - 20) - lh - 14 : Math.max(rc.bottom + 24, Math.min(...tops, H - 20) - lh - 18), lx = (W - lw) / 2;
     lab.style.left = lx + 'px'; lab.style.top = ly + 'px';
     for (const id of ['btnGreen', 'btnBlue', 'btnRed']) {
       const r = $(id).getBoundingClientRect(), ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -1922,7 +1998,12 @@ function openManual() {
     const r = it.el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
     const lab = mk(it.text), lw = lab.offsetWidth, lh = lab.offsetHeight;
     let lx, ly;
-    if (it.side === 'r') { lx = r.right + 40; ly = cy - lh / 2; line(r.right, cy, lx, ly + lh / 2); }
+    if (innerHeight > innerWidth && (it.side === 'r' || it.side === 'l')) {   // 縦持ち：上の角の札は、角のボタンの下に
+      const by = Math.max($('tl').getBoundingClientRect().bottom, $('tr').getBoundingClientRect().bottom) + 16;
+      lx = it.side === 'r' ? r.left : r.right - lw; ly = by;
+      line(cx, r.bottom, it.side === 'r' ? lx + 16 : lx + lw - 16, ly);
+    }
+    else if (it.side === 'r') { lx = r.right + 40; ly = cy - lh / 2; line(r.right, cy, lx, ly + lh / 2); }
     else if (it.side === 'l') { lx = r.left - lw - 40; ly = cy - lh / 2 + (it.dy || 0); line(r.left, cy, lx + lw, ly + lh / 2); }
     else {   // 見回す：上が空いていなければ下に
       lx = cx - lw / 2; ly = cy - 60 - lh;
@@ -2108,7 +2189,20 @@ function beginS1() {
 
 /* ================= タイトル ================= */
 let camTried = false;
+// 全画面：メニューで切り替え（選んだ方は次回も残る）。許可の確認などで外れたときは、次に画面を触ったときに戻す
+const fsOK = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+let wantFS = true; try { wantFS = localStorage.getItem('colors_ar_fs') !== 'off'; } catch (e) {}
+const isFS = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+function fsLabel() { $('mFull').hidden = !fsOK; $('mFull').textContent = '全画面：' + (wantFS ? 'オン' : 'オフ'); }
+$('mFull').addEventListener('click', () => {
+  wantFS = !wantFS; try { localStorage.setItem('colors_ar_fs', wantFS ? 'on' : 'off'); } catch (e) {}
+  if (wantFS) goFullscreen(); else if (isFS()) { try { const r = (document.exitFullscreen || document.webkitExitFullscreen).call(document); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
+  fsLabel();
+});
+document.addEventListener('pointerup', () => { if (fsOK && wantFS && !isFS() && $('title').hidden) goFullscreen(); }, true);
+fsLabel();
 function goFullscreen() {
+  if (!fsOK || !wantFS) return;
   const el = document.documentElement;
   try { const r = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : (el.webkitRequestFullscreen ? el.webkitRequestFullscreen() : null); if (r && r.catch) r.catch(() => {}); } catch (e) {}
 }
@@ -2198,7 +2292,12 @@ $('btnLook').addEventListener('click', examine);
 const ease = t => t * t * (3 - 2 * t);
 let last = performance.now();
 function resize() {
-  const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+  const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h;
+  // 画角：横持ちは左右が広がりすぎないように、縦持ちは左右がせまくなりすぎないように
+  const a = w / h;
+  camera.fov = a >= 1 ? Math.min(62, 2 * Math.atan(Math.tan(46 * D2R) / a) / D2R) : Math.min(95, 2 * Math.atan(Math.tan(33 * D2R) / a) / D2R);
+  camera.updateProjectionMatrix();
+  document.body.classList.toggle('portrait', a < 1);
   const r = Math.tan(LIGHT) / Math.tan(camera.fov * D2R / 2) * (h / 2);
   document.documentElement.style.setProperty('--lr', r.toFixed(1) + 'px');
 }
