@@ -100,6 +100,8 @@ button:focus-visible{outline:3px solid var(--muted);outline-offset:2px}
   display:flex;flex-direction:column;gap:12px;min-width:260px;max-width:100%}
 .panel button{font-family:var(--font);font-size:18px;background:var(--ink);color:var(--paper);border:2px solid var(--paper);padding:10px 16px;text-align:left;cursor:pointer}
 .panel button.hint{background:var(--paper);color:var(--ink)}
+.panel button.hint.blinkM{animation:blinkM .55s steps(1) 3}
+@keyframes blinkM{50%{background:var(--ink);color:var(--paper)}}
 #code .panel{align-items:center;gap:18px}
 #digits{display:flex;gap:12px}
 .digit{display:flex;flex-direction:column;align-items:center;gap:6px}
@@ -213,7 +215,7 @@ body.edPads #editor .panel{margin:0 auto}
 }
 /* 縦持ちで書き換え画面の下に本物のボタンを出すとき：画面は上に寄せる */
 body.portrait.edPads #editor{align-items:flex-start}
-@media (prefers-reduced-motion:reduce){#arrow,.blink3,.btn.appear{animation:none}#black,#light{transition:none}}
+@media (prefers-reduced-motion:reduce){#arrow,.blink3,.blinkM,.btn.appear{animation:none}#black,#light{transition:none}}
 </style>
 
 <video id="cam" playsinline muted hidden></video>
@@ -1878,7 +1880,9 @@ function startHint(required) {
 function openMenu() {
   if (!playing || codeOpen || editOpen || insp || busy) return;
   menuOpen = true; $('menu').hidden = false;
-  $('mManual').classList.toggle('hint', !!hint);
+  const mm = $('mManual'); mm.classList.toggle('hint', !!hint);
+  // 案内中は「操作方法」も、メニューと同じように3回点滅させる
+  mm.classList.remove('blinkM'); if (hint) { void mm.offsetWidth; mm.classList.add('blinkM'); }
   refreshUI();
 }
 function closeMenu() { menuOpen = false; $('menu').hidden = true; refreshUI(); }
@@ -2371,7 +2375,7 @@ window.__colors = { G, get room() { return room && room.id; }, get aimed() { ret
   lookAt(x, y, z) { const v = V(x, y, z).normalize(); dragYaw = Math.atan2(-v.x, -v.z); dragPitch = Math.asin(v.y); },
   hold(c, on) { if (c === null) setLight(null); else setLight(c, !!on); }, rot(dx, dy) { if (insp) rotateHeld(dx, dy); },
   go(id) { $('title').hidden = true; loadRoom(id); playing = true; syncUnlocked(); refreshUI(); },
-  setEra(e) { setEra(e); }, tpos(k) { const p = room.targets[k].pos; return [p.x, p.y, p.z]; }, openEd(k) { openEditor(room.targets[k].edit); }, get paintMode() { return paintMode; } };
+  setEra(e) { setEra(e); }, hint(r) { startHint(!!r); }, tpos(k) { const p = room.targets[k].pos; return [p.x, p.y, p.z]; }, openEd(k) { openEditor(room.targets[k].edit); }, get paintMode() { return paintMode; } };
 })();
 </script>
 
