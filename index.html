@@ -28,6 +28,7 @@ html,body{height:100%;margin:0;overflow:hidden;background:var(--paper);color:var
 #reticle.lit{width:calc(var(--lr,140px)*2);height:calc(var(--lr,140px)*2);opacity:1}
 #reticle.lit.red{border-color:rgba(224,24,24,.8)}
 #reticle.lit.green{border-color:rgba(20,160,60,.85)}
+#reticle.inv{border-color:#fff;opacity:.95}
 #flash{position:fixed;inset:0;pointer-events:none;opacity:0;background:var(--red)}
 
 /* 上の角 */
@@ -120,6 +121,7 @@ button:focus-visible{outline:3px solid var(--muted);outline-offset:2px}
 #edWord button{font-size:28px;min-width:44px;padding:6px 4px;text-align:center;color:#ff4a4a;border:2px solid transparent;background:var(--ink)}
 #edWord button.sel{border-color:var(--paper)}
 #edWord button.chg{text-decoration:underline}
+#edHelp{font-size:13px;line-height:1.5;color:#b0b0b0;text-align:center}
 #edTabs{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
 #edTabs button{font-size:14px;padding:5px 10px;text-align:center}
 #edTabs button.cur{background:var(--paper);color:var(--ink)}
@@ -129,9 +131,15 @@ button:focus-visible{outline:3px solid var(--muted);outline-offset:2px}
 #editor .row button{text-align:center;min-width:110px}
 
 /* 操作方法：いまの画面の上に、ボタンごとの説明を重ねる */
-#manual{position:fixed;inset:0;background:rgba(0,0,0,.78);color:var(--paper)}
-#manual svg{position:absolute;inset:0;width:100%;height:100%}
-#manual .lab{position:absolute;font-size:14px;line-height:1.45;background:var(--ink);border:2px solid var(--paper);padding:3px 8px;white-space:pre-wrap;max-width:270px}
+#manual{position:fixed;inset:0;background:rgba(0,0,0,.78);color:var(--paper);display:flex;align-items:center;justify-content:center;
+  padding:calc(60px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 16px max(16px,env(safe-area-inset-left,0px))}
+#mList{background:var(--ink);border:3px solid var(--paper);outline:3px solid var(--ink);padding:14px 20px;width:min(620px,100%);max-height:100%;overflow-y:auto;font-size:15px;line-height:1.55}
+#mList h2{margin:0 0 6px;font-size:18px;font-weight:400}
+#mList .msec{margin-top:10px;padding:2px 8px;display:inline-block;background:var(--paper);color:var(--ink);font-size:13px}
+#mList ul{margin:6px 0 0;padding-left:1.2em}
+#mList li{margin:3px 0}
+#mList .mk{color:#fff;text-decoration:underline;text-underline-offset:3px}
+#mList .cr{color:#ff5a5a;font-weight:400}#mList .cg{color:#3fd06a;font-weight:400}#mList .cb{color:#7f9bff;font-weight:400}
 #manual .close{position:absolute;left:50%;transform:translateX(-50%);top:calc(14px + env(safe-area-inset-top,0px));
   font-family:var(--font);font-size:16px;background:var(--ink);color:var(--paper);border:2px solid var(--paper);padding:8px 22px;cursor:pointer}
 body.manual .corner,body.manual .pad{z-index:20;pointer-events:none}
@@ -177,12 +185,14 @@ body.edPads #editor .panel{margin:0 auto}
   #editor .panel{max-height:96vh;gap:6px}
   #edWord button{font-size:20px;min-width:34px;padding:2px 4px}
   #edTabs button{font-size:12px;padding:3px 8px}
+  #edHelp{font-size:11px;line-height:1.35}
   #edGrid{gap:3px}
   #edGrid button{font-size:14px;padding:3px 0}
   #editor .row button{min-width:90px;padding:5px 10px}
   .digit .v{font-size:32px;width:50px;height:54px}
   .digit button{width:50px;padding:3px 0}
-  #manual .lab{font-size:12px;max-width:220px;padding:2px 6px}
+  #mList{font-size:13px;line-height:1.45;padding:10px 14px}
+  #manual{padding-top:calc(44px + env(safe-area-inset-top,0px));padding-bottom:8px}
   #manual .close{font-size:14px;padding:5px 16px;top:calc(6px + env(safe-area-inset-top,0px))}
   #btext .title{font-size:48px}
 }
@@ -205,12 +215,13 @@ body.edPads #editor .panel{margin:0 auto}
   #editor .panel{gap:8px}
   #edWord button{font-size:22px;min-width:34px}
   #edTabs button{font-size:12px;padding:4px 7px}
+  #edHelp{font-size:11px}
   #edGrid{gap:3px}
   #edGrid button{font-size:15px;padding:5px 0}
   #editor .row button{min-width:90px}
   .digit .v{font-size:36px;width:54px;height:60px}
   .digit button{width:54px}
-  #manual .lab{font-size:12px;max-width:230px;padding:2px 6px}
+  #mList{font-size:14px;padding:12px 14px}
   #btext .title{font-size:48px}
 }
 /* 縦持ちで書き換え画面の下に本物のボタンを出すとき：画面は上に寄せる */
@@ -257,6 +268,7 @@ body.portrait.edPads #editor{align-items:flex-start}
 
 <div class="sheet" id="editor" hidden><div class="panel" id="editorPanel">
   <div id="edWord"></div>
+  <div id="edHelp">書き換えたい文字を押して選び、下の表から入れる文字を押して「決定」<br>書き換えられるのは、一文字だけ</div>
   <div id="edTabs"></div>
   <div id="edGrid"></div>
   <div class="row" id="edTools" hidden></div>
@@ -268,7 +280,7 @@ body.portrait.edPads #editor{align-items:flex-start}
   <button id="logClose">閉じる</button>
 </div></div>
 
-<div id="manual" hidden><svg id="mSvg"></svg><div id="mLabels"></div><button class="close" id="manClose">閉じる</button></div>
+<div id="manual" hidden><div id="mList"></div><button class="close" id="manClose">閉じる</button></div>
 
 <canvas id="circle" hidden></canvas>
 <div id="black" class="clear"><canvas id="noise" hidden></canvas><p id="btext"></p></div>
@@ -415,6 +427,15 @@ function textPlane(text, color, wid, opt) {
 }
 // 赤い光で見える印：短い文字（「」を除いて4文字まで）はそのまま、長い文は「～」だけ。長い文は調べると読む
 const isShort = t => [...t.replace(/[「」]/g, '')].length <= 4;
+// 張り紙：白い紙に黒い字（2行）。そのまま読める
+function makeNote(l1, l2) {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 320;
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 512, 320); g.strokeStyle = '#000'; g.lineWidth = 8; g.strokeRect(14, 14, 484, 292);
+  g.fillStyle = '#000'; g.font = '88px DotGothic16, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  let fs = 88; while (g.measureText(l2).width > 460 && fs > 40) { fs -= 6; g.font = `${fs}px DotGothic16, sans-serif`; }
+  g.fillText(l1, 256, 112); g.fillText(l2, 256, 214);
+  return new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.375), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c) }));
+}
 function redMark(text, wid) { return isShort(text) ? textPlane(text, '#e01818', wid) : textPlane('～', '#e01818', wid * 1.6, { big: true }); }
 
 // 扉（線画）。開くと奥が黒くなる
@@ -655,6 +676,9 @@ const ROOMS = {
     // 扉（右の壁）
     const door = makeDoor(0x000000, 0xffffff); placeOn(door.g, 'right', W, D, 0, 0, 0.004); sh.grp.add(door.g);
     if (F.ev.s2_door_open) door.dark.material.opacity = 1;
+    // 扉の横の壁の張り紙「３つのかけあわせ」（そのまま読める。調べても読める）
+    const note = makeNote('３つの', 'かけあわせ'); placeOn(note, 'right', W, D, -0.95, 1.35, 0.006); sh.grp.add(note);
+    const notePos = wallPos('right', W, D, -0.95, 1.35);
     const lb = (t, p) => { const m = redMark(t, 0.55); m.position.copy(p); sh.grp.add(m); return m; };
     const targets = {
       bed: { pos: V(-1.95, FLOOR + 0.5, -1.4), act: () => true, hidden: 's2_bed', label: lb('「3」', V(-1.8, FLOOR + 0.85, -1.4)),
@@ -670,14 +694,15 @@ const ROOMS = {
       box: { pos: boxHome.clone(), act: () => true, hidden: 's2_box', label: lb('「2」', V(1.75, FLOOR + 0.9, 1.75)),
         examine() { say(F.seen.s2_box ? '「2」' : '箱だ。'); } },
       box2: { pos: box2Home.clone(), act: () => true, examine() { say('空の箱だ。'); } },
-      door: { pos: V(W, FLOOR + 1.0, 0), act: () => true, hidden: 's2_door', label: lb('「３つのかけあわせ」', V(W - 0.12, FLOOR + 1.0, 0)), canSee: () => !F.ev.s2_door_open,
+      note: { pos: notePos, act: () => true, examine() { say('「３つのかけあわせ」'); } },
+      door: { pos: V(W, FLOOR + 1.0, 0), act: () => true,
         examine() {
           if (F.ev.s2_door_open) { goRoom('c2'); return; }
           const ask = () => openCode('00', v => {
             if (v !== '54') { say('……扉は動かない。'); return; }
             F.ev.s2_door_open = true; quake(0.5); rumble(0.9); fadeDark(door.dark, 0.9); say('扉が開いた。');
           });
-          if (F.seen.s2_door) say('「３つのかけあわせ」', ask); else ask();
+          ask();
         } }
     };
     return { grp: sh.grp, targets };
@@ -1033,10 +1058,11 @@ const ROOMS = {
     const DZ = 1.0;    // 鍵穴・扉の位置
     const part = {};
     const mkPart = (holes) => { const g = wall(D * 2, holes, faceMat(0xffffff), INK); g.position.set(PX, FLOOR, 0); g.rotation.y = -Math.PI / 2; sh.grp.add(g); return g; };
-    part.present = mkPart([]);
+    part.present = mkPart([{ x: OZ, y: 1.65, w: 0.1, h: 0.7, noEdge: true }]);   // 現在：細いすき間（上の方だけ。床の箱は見えない）
     part.past = mkPart([{ x: OZ, y: 0.95, w: 0.9, h: 1.9, noEdge: true }]);
     part.future = mkPart([{ x: OZ, y: 0.9, w: 1.0, h: 1.0, noEdge: true }]);
     sh.grp.add(segs([[PX, FLOOR, -D], [PX, FLOOR, D], [PX, CEIL, -D], [PX, CEIL, D]]));
+    part.present.userData.edge = segs([...loop([[PX - 0.003, FLOOR + 1.3, OZ - 0.05], [PX - 0.003, FLOOR + 1.3, OZ + 0.05], [PX - 0.003, FLOOR + 2.0, OZ + 0.05], [PX - 0.003, FLOOR + 2.0, OZ - 0.05]])]); sh.grp.add(part.present.userData.edge);
     // 過去：アーチの縁
     const arch = []; for (let i = 0; i <= 16; i++) { const a = Math.PI * i / 16; arch.push([PX - 0.003, FLOOR + 1.45 + Math.sin(a) * 0.45, OZ + Math.cos(a) * 0.45]); }
     const archL = []; for (let i = 0; i < 16; i++) archL.push(arch[i], arch[i + 1]);
@@ -1049,15 +1075,15 @@ const ROOMS = {
     for (const [x, z, s] of [[0.8, OZ - 0.75, 0.1], [0.7, OZ + 0.7, 0.08], [0.85, OZ + 1.0, 0.09]]) jl.push(...loop([[x - s, FLOOR + 0.004, z - s], [x + s, FLOOR + 0.004, z - s * 0.6], [x + s * 0.7, FLOOR + 0.004, z + s], [x - s * 0.8, FLOOR + 0.004, z + s * 0.7]]));
     part.future.userData.edge = segs(jl); sh.grp.add(part.future.userData.edge);
     // 植物：のぞき口の手前。過去は芽、現在は若木、未来は葉の落ちた枯れ木（現在より少し大きい）と落ち葉
-    const PP = V(0.5, FLOOR, -0.15);
+    const PP = V(0.68, FLOOR, -0.38);
     const plant = {};
     plant.past = new THREE.Group(); plant.past.add(segs([[0, 0, 0], [0, 0.12, 0], [0, 0.1, 0], [0.06, 0.15, 0], [0, 0.1, 0], [-0.06, 0.15, 0]]));
     plant.past.position.copy(PP); sh.grp.add(plant.past);
     {
-      const g = new THREE.Group(), tr = 0.08, th = 1.0;
+      const g = new THREE.Group(), tr = 0.06, th = 0.7;   // 若木：小さめ（スタート位置にかぶらない）
       g.add(segs([[-tr, 0, 0], [-tr * 0.7, th, 0], [tr, 0, 0], [tr * 0.7, th, 0], [0, 0, -tr], [0, th, -tr * 0.7], [0, 0, tr], [0, th, tr * 0.7]]));
-      const sp = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5, 1), faceMat(0xffffff)); sp.position.y = 1.25; g.add(sp);
-      const se = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(0.5, 1)), INK); se.position.y = 1.25; g.add(se);
+      const sp = new THREE.Mesh(new THREE.IcosahedronGeometry(0.32, 1), faceMat(0xffffff)); sp.position.y = 0.92; g.add(sp);
+      const se = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(0.32, 1)), INK); se.position.y = 0.92; g.add(se);
       g.position.copy(PP); sh.grp.add(g); plant.present = g;
     }
     {
@@ -1248,10 +1274,7 @@ const ROOMS = {
     // 扉
     const door = makeDoor(0x000000, 0xffffff); placeOn(door.g, 'right', W, D, 0, 0, 0.004); sh.grp.add(door.g);
     // 扉の横の壁の張り紙「よるはとおれない」（そのまま読める。調べても読める）
-    const npc = document.createElement('canvas'); npc.width = 512; npc.height = 320;
-    { const g = npc.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 512, 320); g.strokeStyle = '#000'; g.lineWidth = 8; g.strokeRect(14, 14, 484, 292);
-      g.fillStyle = '#000'; g.font = '88px DotGothic16, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('よるは', 256, 112); g.fillText('とおれない', 256, 214); }
-    const note = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.375), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(npc) }));
+    const note = makeNote('よるは', 'とおれない');
     placeOn(note, 'right', W, D, -0.95, 1.35, 0.006); sh.grp.add(note);
     const notePos = wallPos('right', W, D, -0.95, 1.35);
     if (F.ev.s6_door_open) door.dark.material.opacity = 1;
@@ -1280,8 +1303,8 @@ const ROOMS = {
           if (!F.ev.clock_on) { F.ev.clock_on = true; quake(0.6); rumble(0.6); say('ボタンを押した。壁に時計がある。'); }
           else say('壁のボタンは押した。');
         } },
-      note: { pos: notePos, act: () => true, examine() { say('「よるはとおれない」'); } },
-      door: { pos: V(W, FLOOR + 1.0, 0), act: () => true,
+      note: { pos: notePos, act: () => era === 'present', examine() { say('「よるはとおれない」'); } },
+      door: { pos: V(W, FLOOR + 1.0, 0), act: () => era === 'present',
         examine() {
           if (F.ev.s6_door_open) { goRoom('c6'); return; }
           if (F.ev.s6_day) { F.ev.s6_door_open = true; fadeDark(door.dark, 0.9); say('扉が開いた。'); }
@@ -1290,6 +1313,7 @@ const ROOMS = {
     };
     const tick = dt => {
       clock.visible = !!F.ev.clock_on;
+      door.g.visible = note.visible = era === 'present';   // 出口の扉（と張り紙）は現在だけ
       const glit = era === 'future' && !!F.ev.s6_pressed && lit('green', WB);   // 透明なボタンは未来にだけある
       if (glit) F.seen.s6_wbtn_d = true;
       wbg.material.opacity += ((glit && !F.ev.wbtn_real ? 1 : 0) - wbg.material.opacity) * Math.min(1, dt * 8); wbg.visible = wbg.material.opacity > 0.02;
@@ -1919,107 +1943,41 @@ function openManual() {
   manualOpen = true;
   const F = G.flags;
   if (!F.ev.ctrlSeen) { F.ev.ctrlSeen = true; unlocked.btnLook = true; }
-  hint = null; $('arrow').hidden = true;
-  refreshUI(); $('padL').hidden = false; $('padR').hidden = false;
-  for (const id in unlocked) $(id).hidden = !unlocked[id];
-  document.body.classList.add('manual'); $('manual').hidden = false;
-  const items = [
-    { el: $('btnMenu'), text: 'メニュー', side: 'r' },
-    { el: $('btnFront'), text: 'いま向いている方を、正面にする', side: 'l', dy: 40 },
-    { el: $('reticle'), text: lookByTouch ? '見回す：画面を指でなぞる' : '見回す：端末を向けた方が見える', side: 'c' },
-    { el: $('btnLook'), text: '調べる：中央の丸を合わせて押す', side: 'l', dy: -30 },
-    { el: $('btnRed'), text: F.redPaint ? '赤：押す間、赤い光\n色：赤い色をつける' : '赤：押す間、赤い光', side: 'l', dy: 10 },
-    { el: $('btnMode'), text: '光⇄色：光と色の切り替え', side: 'r', dy: -26 },
-    { el: $('btnGreen'), text: F.paintGB ? '緑：押す間、緑の光\n色：透明なものを実体に' : '緑：押す間、緑の光', side: 'r', dy: F.paintGB ? -14 : -6 },
-    { el: $('btnBlue'), text: F.paintGB ? '青：押す間、周りに青い光\n色：部屋の時間を変える' : '青：押す間、周りに青い光', side: 'r', dy: F.paintGB ? 34 : 26 }
-  ];
-  // 3つ同時（白・黒）：3-2で白を得る前に操作方法を開くと、「光：白い光」がゆっくり浮かび上がる
+  hint = null; $('arrow').hidden = true; refreshUI();
+  // 白い光：3-2で、白を得る前に操作方法を開くと、その行だけがゆっくり浮かび上がる
   whitePending = !!(room && room.id === 's8' && F.ev.s8_hint && !F.white);
-  const showWhite = F.white || whitePending, tri = showWhite || F.ev.blackReady;
-  const svg = $('mSvg'), labs = $('mLabels'); svg.innerHTML = ''; labs.innerHTML = '';
-  const W = innerWidth, H = innerHeight;
-  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-  const line = (x1, y1, x2, y2) => { const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    ln.setAttribute('x1', x1); ln.setAttribute('y1', y1); ln.setAttribute('x2', x2); ln.setAttribute('y2', y2); ln.setAttribute('stroke', '#fff'); ln.setAttribute('stroke-width', '2'); svg.appendChild(ln); };
-  const mk = text => { const lab = document.createElement('div'); lab.className = 'lab'; lab.textContent = text; labs.appendChild(lab); return lab; };
-  const LEFT = [$('btnMode'), $('btnGreen'), $('btnBlue')], RIGHT = [$('btnLook'), $('btnRed')];
-  const lefts = items.filter(it => LEFT.includes(it.el) && !it.el.hidden), rights = items.filter(it => RIGHT.includes(it.el) && !it.el.hidden);
-  const padR0 = $('padL').getBoundingClientRect(), padRR = $('padR').getBoundingClientRect();
-  if (innerHeight > innerWidth) {
-    // 縦持ち：ボタンの上に、真ん中ぞろえで1列に積む（左のボタンは札の左へ、右のボタンは札の右へ線）
-    let y = Math.min(padR0.top, padRR.top) - 10;
-    for (const it of [...lefts, ...rights].reverse()) {
-      const lab = mk(it.text), lw = lab.offsetWidth, lh = lab.offsetHeight;
-      y -= lh + 6; const lx = (W - lw) / 2;
-      lab.style.left = lx + 'px'; lab.style.top = y + 'px';
-      const r = it.el.getBoundingClientRect(), isL = LEFT.includes(it.el);
-      line(r.left + r.width / 2, r.top, isL ? lx : lx + lw, y + lh / 2);
-    }
-  } else {
-    // 左手側（光⇄色・緑・青・3つ同時）：左のボタンの右に、下から順に積む
-    let y = padR0.bottom - 4;
-    for (const it of lefts.slice().reverse()) {
-      const lab = mk(it.text), lw = lab.offsetWidth, lh = lab.offsetHeight;
-      y -= lh + 8; const lx = padR0.right + 36;
-      lab.style.left = lx + 'px'; lab.style.top = y + 'px';
-      const r = it.el.getBoundingClientRect();
-      line(r.right, r.top + r.height / 2, lx, y + lh / 2);
-    }
-    // 右手側（調べる・赤）：右のボタンの左に、下から順に積む
-    y = padRR.bottom - 4;
-    for (const it of rights.slice().reverse()) {
-      const lab = mk(it.text), lw = lab.offsetWidth, lh = lab.offsetHeight;
-      y -= lh + 8; const lx = padRR.left - 36 - lw;
-      lab.style.left = lx + 'px'; lab.style.top = y + 'px';
-      const r = it.el.getBoundingClientRect(); line(r.left, r.top + r.height / 2, lx + lw, y + lh / 2);
-    }
+  const R = '<b class="cr">赤</b>', Gr = '<b class="cg">緑</b>', B = '<b class="cb">青</b>';
+  const li = (k, v, cls) => `<li${cls ? ` class="${cls}"` : ''}><span class="mk">${k}</span>：${v}</li>`;
+  let h = '<h2>操作方法</h2><div class="msec">基本</div><ul>';
+  h += li('見回す', lookByTouch ? '画面を指でなぞる' : '端末を動かして、見たい方へ向ける');
+  h += li('調べるボタン', '中央の丸を合わせて押す（扉に入る・物を手に取る）');
+  h += li('正面を合わせるボタン', 'いま向いている方を、正面にする');
+  h += li('メニューボタン', 'メニューを開く');
+  h += li('手に取った物', '指でなぞると回る。2本指で大きさが変わる。やめるボタンで元に戻す');
+  h += '</ul>';
+  if (F.red || F.green || F.blue) {
+    h += '<div class="msec">光</div><ul>';
+    if (F.red) h += li(R + 'ボタン（押している間）', '赤の光を出す');
+    if (F.green) h += li(Gr + 'ボタン（押している間）', '緑の光を出す');
+    if (F.blue) h += li(B + 'ボタン（押している間）', '周りに青の光を出す');
+    if (F.white || whitePending) h += li(R + '・' + Gr + '・' + B + 'ボタンを同時に（押している間）', '白い光を出す', whitePending ? 'wfade' : '');
+    h += '</ul>';
   }
-  // 3つ同時：真ん中（左右の札より上）に置き、赤・緑・青の3つへ線をのばす
-  if (tri) {
-    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g'); svg.appendChild(g);
-    const lab = document.createElement('div'); lab.className = 'lab';
-    const onlyWhite = whitePending && !F.ev.blackReady;
-    lab.innerHTML = '赤・緑・青を同時に押し続ける' + (showWhite ? `<span class="${whitePending ? 'wfade' : ''}">\n光：白い光</span>` : '') + (F.ev.blackReady ? '\n色：黒で塗る' : '');
-    labs.appendChild(lab);
-    const lw = lab.offsetWidth, lh = lab.offsetHeight;
-    const tops = [...labs.children].filter(l => l !== lab).map(l => l.getBoundingClientRect().top);
-    const rc = $('reticle').getBoundingClientRect();
-    const ly = innerHeight > innerWidth ? Math.min(...tops, H - 20) - lh - 14 : Math.max(rc.bottom + 24, Math.min(...tops, H - 20) - lh - 18), lx = (W - lw) / 2;
-    lab.style.left = lx + 'px'; lab.style.top = ly + 'px';
-    for (const id of ['btnGreen', 'btnBlue', 'btnRed']) {
-      const r = $(id).getBoundingClientRect(), ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      const sx = id === 'btnRed' ? lx + lw - 14 : lx + 14;
-      ln.setAttribute('x1', sx); ln.setAttribute('y1', ly + lh); ln.setAttribute('x2', r.left + r.width / 2); ln.setAttribute('y2', r.top);
-      ln.setAttribute('stroke', '#fff'); ln.setAttribute('stroke-width', '2'); ln.setAttribute('stroke-dasharray', '5 4'); g.appendChild(ln);
-    }
-    if (onlyWhite) { lab.classList.add('wfade'); g.setAttribute('class', 'wfade'); }
-    if (whitePending) requestAnimationFrame(() => requestAnimationFrame(() => document.querySelectorAll('#manual .wfade').forEach(e => e.classList.add('show'))));
+  if (F.redPaint) {
+    h += '<div class="msec">色づけ</div><ul>';
+    h += li('光⇄色ボタン', '光と色づけを切り替える');
+    h += li(R + 'ボタン', '赤色をつける');
+    if (F.paintGB) { h += li(Gr + 'ボタン', '緑色をつける'); h += li(B + 'ボタン', '青色をつける'); }
+    if (F.ev.blackReady) h += li(R + '・' + Gr + '・' + B + 'ボタンを同時に（押し続ける）', '黒色をつける');
+    h += '</ul>';
   }
-  // 上の角と、見回す（左右に積んだ札とは重ならないように置く）
-  const placed = [...labs.children].map(l => { const b = l.getBoundingClientRect(); return { l: b.left, r: b.right, t: b.top, b: b.bottom }; });
-  for (const it of items) {
-    if (LEFT.includes(it.el) || RIGHT.includes(it.el) || it.el.hidden) continue;
-    const r = it.el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-    const lab = mk(it.text), lw = lab.offsetWidth, lh = lab.offsetHeight;
-    let lx, ly;
-    if (innerHeight > innerWidth && (it.side === 'r' || it.side === 'l')) {   // 縦持ち：上の角の札は、角のボタンの下に
-      const by = Math.max($('tl').getBoundingClientRect().bottom, $('tr').getBoundingClientRect().bottom) + 16;
-      lx = it.side === 'r' ? r.left : r.right - lw; ly = by;
-      line(cx, r.bottom, it.side === 'r' ? lx + 16 : lx + lw - 16, ly);
-    }
-    else if (it.side === 'r') { lx = r.right + 40; ly = cy - lh / 2; line(r.right, cy, lx, ly + lh / 2); }
-    else if (it.side === 'l') { lx = r.left - lw - 40; ly = cy - lh / 2 + (it.dy || 0); line(r.left, cy, lx + lw, ly + lh / 2); }
-    else {   // 見回す：上が空いていなければ下に
-      lx = cx - lw / 2; ly = cy - 60 - lh;
-      const hit = (y0) => placed.some(p => lx < p.r && lx + lw > p.l && y0 < p.b && y0 + lh > p.t);
-      if (hit(ly) || ly < 60) { ly = cy + 50; line(cx, r.bottom, cx, ly); } else line(cx, r.top, cx, ly + lh);
-    }
-    lab.style.left = lx + 'px'; lab.style.top = ly + 'px';
-  }
+  $('mList').innerHTML = h; $('mList').scrollTop = 0;
+  $('manual').hidden = false;
+  if (whitePending) requestAnimationFrame(() => requestAnimationFrame(() => document.querySelectorAll('#manual .wfade').forEach(e => e.classList.add('show'))));
 }
 let whitePending = false;
 $('manClose').addEventListener('click', () => {
-  manualOpen = false; $('manual').hidden = true; document.body.classList.remove('manual');
+  manualOpen = false; $('manual').hidden = true;
   if (whitePending) {   // 操作方法を閉じると、白い光が使えるようになる
     whitePending = false; G.flags.white = true; menuOpen = false; $('menu').hidden = true; refreshUI();
     say('何かが変わった気がする', null, true); return;
@@ -2295,6 +2253,7 @@ $('btnLook').addEventListener('click', examine);
 /* ================= 毎フレーム ================= */
 const ease = t => t * t * (3 - 2 * t);
 let last = performance.now();
+let darkCenter = false, pixN = 0; const pixBuf = new Uint8Array(4), pixSz = new THREE.Vector2();
 function resize() {
   const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h;
   // 画角：横持ちは左右が広がりすぎないように、縦持ちは左右がせまくなりすぎないように
@@ -2348,6 +2307,7 @@ function loopFrame(now) {
     if (!insp) $('btnLook').disabled = !aimed && !(room.examineAny && room.examineAny());
     const lc = lightColor();
     $('reticle').className = (lc === 'red' || lc === 'green' || lc === 'white') ? 'lit ' + lc : (aimed ? 'aim' : '');
+    $('reticle').classList.toggle('inv', darkCenter);   // 黒い所では白い丸
     if (insp) {
       const g = insp.obj.g;
       if (insp.state === 'hold' && insp.opt.tick) insp.opt.tick(dt);
@@ -2362,6 +2322,12 @@ function loopFrame(now) {
     }
   }
   renderer.render(scene, camera);
+  // 画面の真ん中が黒いかどうか（4コマに1回だけ調べる）
+  if (++pixN % 4 === 0) {
+    const gl = renderer.getContext(); renderer.getDrawingBufferSize(pixSz);
+    gl.readPixels(Math.floor(pixSz.x / 2), Math.floor(pixSz.y / 2), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixBuf);
+    darkCenter = pixBuf[3] > 128 && (pixBuf[0] * 0.3 + pixBuf[1] * 0.59 + pixBuf[2] * 0.11) < 80;
+  }
   requestAnimationFrame(loopFrame);
 }
 
